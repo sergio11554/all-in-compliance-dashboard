@@ -40,7 +40,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        # ubuntu-latest already provides the required runtime libraries. Avoid
+        # coupling the browser download to unrelated third-party APT sources.
+        run: npx playwright install chromium
 
       - name: Run complete quality suite
         run: ./scripts/test.sh
