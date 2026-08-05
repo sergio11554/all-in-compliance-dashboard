@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SFM Compliance Dashboard</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css?v=20260715.1" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Hauptnavigation">
+        <div class="brand">
+          <div class="brand-mark">SFM</div>
+          <div>
+            <h1>SFM Compliance</h1>
+            <p data-i18n="brand.subtitle">ISO 27001 und NIS-2 Workspace</p>
+          </div>
+        </div>
+
+        <button class="mobile-nav-toggle" id="mobileNavToggle" type="button" aria-expanded="false" aria-controls="mainNav">
+          <span class="mobile-nav-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>Navigation</span>
+        </button>
+
+        <div class="language-switcher" id="languageSwitcher">
+          <button class="language-trigger" id="languageTrigger" type="button" aria-expanded="false" aria-controls="languageMenu">
+            <span aria-hidden="true">◎</span>
+            <strong id="languageCurrent">Deutsch</strong>
+            <em aria-hidden="true">⌄</em>
+          </button>
+          <div class="language-menu" id="languageMenu" role="menu" hidden>
+            <button type="button" role="menuitemradio" data-language-option="de" aria-checked="true">Deutsch</button>
+            <button type="button" role="menuitemradio" data-language-option="en" aria-checked="false">English</button>
+          </div>
+        </div>
+
+        <nav id="mainNav" class="main-nav"></nav>
+
+        <div class="knowledge-card">
+          <span class="eyebrow" data-i18n="workspace.eyebrow">Workspace</span>
+          <strong data-i18n="workspace.title">Kundenansicht</strong>
+          <p data-i18n="workspace.copy">ISO 27001, NIS-2, Nachweise, Aufgaben und Register in einer gemeinsamen Arbeitsansicht.</p>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <span class="eyebrow" data-i18n="top.eyebrow">SFM Compliance Workspace</span>
+            <h2 id="viewTitle">Dashboard</h2>
+            <p id="viewSubtitle" class="view-subtitle" data-i18n="subtitle.default">Geführte Vorbereitung, Nachweise und Beraterprüfung an einem Ort.</p>
+            <div id="topStatusChips" class="top-status-chips" aria-label="Arbeitskontext"></div>
+          </div>
+          <div class="top-actions">
+            <button class="icon-button" id="guideToggleBtn" type="button" title="Kundenhilfe ein- oder ausblenden" aria-label="Kundenhilfe ein- oder ausblenden">
+              <span aria-hidden="true">?</span>
+              <span data-i18n="button.help">Hilfe</span>
+            </button>
+            <button class="icon-button" id="exportBtn" type="button" title="Daten exportieren" aria-label="Daten exportieren">
+              <span aria-hidden="true">↓</span>
+              <span data-i18n="button.export">Export</span>
+            </button>
+            <label class="icon-button file-import" title="Daten importieren">
+              <span aria-hidden="true">↑</span>
+              <span data-i18n="button.import">Import</span>
+              <input id="importInput" type="file" accept="application/json" />
+            </label>
+          </div>
+        </header>
+
+        <section id="appView" class="view" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="core-utils.js?v=20260714.1"></script>
+    <script src="api-client.js?v=20260714.1"></script>
+    <script src="state-store.js?v=20260714.1"></script>
+    <script src="router.js?v=20260714.1"></script>
+    <script src="workspace-validator.js?v=20260714.1"></script>
+    <script src="access-control.js?v=20260714.1"></script>
+    <script src="language-service.js?v=20260714.1"></script>
+    <script src="review-workflow.js?v=20260714.1"></script>
+    <script src="risk-engine.js?v=20260714.1"></script>
+    <script src="audit-package-gate.js?v=20260714.1"></script>
+    <script src="versioning.js?v=20260714.1"></script>
+    <script src="task-engine.js?v=20260714.1"></script>
+    <script src="soa-engine.js?v=20260714.1"></script>
+    <script src="project-plan-engine.js?v=20260714.1"></script>
+    <script src="document-engine.js?v=20260714.1"></script>
+    <script src="workspace-merge.js?v=20260714.1"></script>
+    <script src="app.js?v=20260716.1"></script>
+  </body>
+</html>

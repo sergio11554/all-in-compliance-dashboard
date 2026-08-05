@@ -1,0 +1,210 @@
+name: Quality checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Backend and browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install test dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run complete quality suite
+        run: ./scripts/test.sh
+
+  postgres:
+    name: PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sfm_compliance_test
+          POSTGRES_USER: sfm_test
+          POSTGRES_PASSWORD: postgres-smoke-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sfm_test -d sfm_compliance_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PostgreSQL driver
+        run: pip install -r requirements.txt
+
+      - name: Start backend against PostgreSQL
+        env:
+          DATABASE_URL: postgresql://sfm_test:postgres-smoke-password@127.0.0.1:5432/sfm_compliance_test
+          ISMS_HOST: 127.0.0.1
+          ISMS_PORT: 5188
+          ISMS_PUBLIC_URL: http://127.0.0.1:5188
+          ISMS_STATIC_BASE: ${{ github.workspace }}/frontend-current
+          ISMS_DATA_DIR: ${{ runner.temp }}/sfm-postgres-data
+          ISMS_ADMIN_PASSWORD: Postgres-Smoke-Admin-2026!
+          ISMS_FILE_KEY: postgres-smoke-file-key
+          ISMS_COOKIE_SECURE: "0"
+          ISMS_HSTS: "0"
+          ISMS_OPERATIONS_MONITOR_ENABLED: "0"
+          ISMS_NOTIFICATION_DELIVERY_ENABLED: "0"
+        run: |
+          python backend_app.py >"${RUNNER_TEMP}/sfm-postgres-backend.log" 2>&1 &
+          echo $! >"${RUNNER_TEMP}/sfm-postgres-backend.pid"
+          for attempt in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:5188/api/health && exit 0
+            sleep 1
+          done
+          cat "${RUNNER_TEMP}/sfm-postgres-backend.log"
+          exit 1
+
+      - name: Run PostgreSQL application smoke test
+        env:
+          SFM_SMOKE_BASE_URL: http://127.0.0.1:5188
+          ISMS_ADMIN_PASSWORD: Postgres-Smoke-Admin-2026!
+        run: python scripts/postgres_smoke.py
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -f "${RUNNER_TEMP}/sfm-postgres-backend.pid" ]; then
+            kill "$(cat "${RUNNER_TEMP}/sfm-postgres-backend.pid")" || true
+          fi
+          cat "${RUNNER_TEMP}/sfm-postgres-backend.log" || true
+
+  object-storage:
+    name: S3 object storage integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build application image
+        run: docker build -t sfm-compliance-storage-test .
+
+      - name: Start MinIO and backend
+        env:
+          STORAGE_PASSWORD: Storage-Smoke-Password-2026!
+          ADMIN_PASSWORD: Storage-Smoke-Admin-2026!
+        run: |
+          docker network create sfm-storage-test
+          docker run -d --rm --name sfm-storage-minio --network sfm-storage-test -p 9000:9000 \
+            -e MINIO_ROOT_USER=sfm-storage-admin \
+            -e MINIO_ROOT_PASSWORD="${STORAGE_PASSWORD}" \
+            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(60):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:9000/minio/health/live", timeout=2):
+                      break
+              except Exception:
+                  time.sleep(1)
+          else:
+              raise SystemExit("MinIO did not become ready")
+          PY
+          docker run -d --rm --name sfm-storage-app --network sfm-storage-test -p 5189:5173 \
+            -v "${GITHUB_WORKSPACE}/frontend-current:/app/frontend:ro" \
+            -e ISMS_ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
+            -e ISMS_FILE_KEY=storage-smoke-file-key \
+            -e ISMS_OPERATIONS_MONITOR_ENABLED=0 \
+            -e ISMS_NOTIFICATION_DELIVERY_ENABLED=0 \
+            -e ISMS_STORAGE_BACKEND=s3 \
+            -e ISMS_S3_ENDPOINT=http://sfm-storage-minio:9000 \
+            -e ISMS_S3_BUCKET=sfm-compliance-evidence \
+            -e ISMS_S3_ACCESS_KEY=sfm-storage-admin \
+            -e ISMS_S3_SECRET_KEY="${STORAGE_PASSWORD}" \
+            -e ISMS_S3_AUTO_CREATE_BUCKET=1 \
+            sfm-compliance-storage-test
+          for attempt in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:5189/api/health && exit 0
+            sleep 1
+          done
+          docker logs sfm-storage-app
+          exit 1
+
+      - name: Run encrypted S3 roundtrip
+        env:
+          SFM_SMOKE_BASE_URL: http://127.0.0.1:5189
+          ISMS_ADMIN_PASSWORD: Storage-Smoke-Admin-2026!
+        run: docker exec -e SFM_SMOKE_BASE_URL -e ISMS_ADMIN_PASSWORD sfm-storage-app python /app/scripts/storage_smoke.py
+
+      - name: Show logs and stop containers
+        if: always()
+        run: |
+          docker logs sfm-storage-app || true
+          docker logs sfm-storage-minio || true
+          docker rm -f sfm-storage-app sfm-storage-minio || true
+          docker network rm sfm-storage-test || true
+
+  deployment-package:
+    name: Deployment package contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate repository Compose configuration
+        run: docker compose --env-file .env.example config --quiet
+
+      - name: Build isolated release package
+        env:
+          SFM_RELEASE_ROOT: ${{ runner.temp }}/sfm-releases
+        run: ./scripts/prepare_release.sh "${GITHUB_WORKSPACE}/frontend-current"
+
+      - name: Validate and build packaged deployment
+        env:
+          SFM_RELEASE_ROOT: ${{ runner.temp }}/sfm-releases
+        run: |
+          RELEASE_DIR="$(find "${SFM_RELEASE_ROOT}" -maxdepth 1 -type d -name 'sfm-compliance-*' | sort | tail -n 1)"
+          test -n "${RELEASE_DIR}"
+          test -f "${RELEASE_DIR}/frontend-current/index.html"
+          test -f "${RELEASE_DIR}/scripts/production_preflight.py"
+          docker compose --env-file "${RELEASE_DIR}/.env.example" -f "${RELEASE_DIR}/docker-compose.yml" config --quiet
+          docker build -t sfm-compliance-release-contract "${RELEASE_DIR}"

@@ -1,0 +1,22 @@
+[Unit]
+Description=SFM Compliance Backend
+After=network.target
+
+[Service]
+Type=simple
+User=sfm-compliance
+Group=sfm-compliance
+WorkingDirectory=/opt/sfm-compliance/backend
+EnvironmentFile=/etc/sfm-compliance.env
+ExecStart=/usr/bin/python3 /opt/sfm-compliance/backend/backend_app.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/sfm-compliance
+UMask=0077
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

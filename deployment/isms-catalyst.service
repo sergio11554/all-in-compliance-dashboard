@@ -1,0 +1,22 @@
+[Unit]
+Description=ISMS Catalyst Backend
+After=network.target
+
+[Service]
+Type=simple
+User=isms-catalyst
+Group=isms-catalyst
+WorkingDirectory=/opt/isms-catalyst/backend
+EnvironmentFile=/etc/isms-catalyst.env
+ExecStart=/usr/bin/python3 /opt/isms-catalyst/backend/backend_app.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/isms-catalyst
+UMask=0077
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

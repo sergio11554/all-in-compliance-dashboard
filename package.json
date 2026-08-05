@@ -1,0 +1,14 @@
+{
+  "name": "sfm-compliance-quality",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated quality checks for SFM Compliance.",
+  "scripts": {
+    "test": "./scripts/test.sh",
+    "test:e2e": "node tests/frontend_e2e.cjs",
+    "preflight:production": "python3 scripts/production_preflight.py"
+  },
+  "devDependencies": {
+    "playwright": "1.61.0"
+  }
+}

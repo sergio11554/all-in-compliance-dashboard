@@ -1,0 +1,51 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa*
+
+# Runtime data: databases, uploads, encryption keys, logs and backups
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.ismsbak
+*.log
+*.pid
+
+# Dependencies and language caches
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Generated builds, releases and test artifacts
+release/
+dist/
+build/
+coverage/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+playwright-report/
+test-results/
+frontend-current/docs/rendered-*/
+frontend-current/docs/*.docx
+
+# Local editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
