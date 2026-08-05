@@ -15,6 +15,7 @@ fi
 
 python3 - "$FRONTEND_DIR" <<'PY'
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 frontend = Path(sys.argv[1])
@@ -24,23 +25,6 @@ checks = {
         'id="appView"',
         'id="toast"',
         'id="guideToggleBtn"',
-        '<script src="core-utils.js"></script>',
-        '<script src="api-client.js"></script>',
-        '<script src="state-store.js"></script>',
-        '<script src="router.js"></script>',
-        '<script src="workspace-validator.js"></script>',
-        '<script src="access-control.js"></script>',
-        '<script src="language-service.js"></script>',
-        '<script src="review-workflow.js"></script>',
-        '<script src="risk-engine.js"></script>',
-        '<script src="audit-package-gate.js"></script>',
-        '<script src="versioning.js"></script>',
-        '<script src="task-engine.js"></script>',
-        '<script src="soa-engine.js"></script>',
-        '<script src="project-plan-engine.js"></script>',
-        '<script src="document-engine.js"></script>',
-        '<script src="workspace-merge.js"></script>',
-        '<script src="app.js"></script>',
         "</html>",
     ],
     "core-utils.js": [
@@ -135,6 +119,40 @@ checks = {
     ],
 }
 
+required_scripts = {
+    "core-utils.js",
+    "api-client.js",
+    "state-store.js",
+    "router.js",
+    "workspace-validator.js",
+    "access-control.js",
+    "language-service.js",
+    "review-workflow.js",
+    "risk-engine.js",
+    "audit-package-gate.js",
+    "versioning.js",
+    "task-engine.js",
+    "soa-engine.js",
+    "project-plan-engine.js",
+    "document-engine.js",
+    "workspace-merge.js",
+    "app.js",
+}
+
+
+class ScriptSourceParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.sources = set()
+
+    def handle_starttag(self, tag, attrs):
+        if tag.casefold() != "script":
+            return
+        source = dict(attrs).get("src", "")
+        normalized = source.split("?", 1)[0].split("#", 1)[0]
+        if normalized:
+            self.sources.add(Path(normalized).name)
+
 minimum_sizes = {
     "index.html": 1000,
     "core-utils.js": 1000,
@@ -168,6 +186,15 @@ for name, markers in checks.items():
     missing = [marker for marker in markers if marker not in text]
     if missing:
         raise SystemExit(f"Frontend validation failed: {name} missing {', '.join(missing)}")
+
+index_parser = ScriptSourceParser()
+index_parser.feed((frontend / "index.html").read_text(encoding="utf-8"))
+missing_scripts = sorted(required_scripts - index_parser.sources)
+if missing_scripts:
+    raise SystemExit(
+        "Frontend validation failed: index.html missing script sources "
+        + ", ".join(missing_scripts)
+    )
 
 css = (frontend / "styles.css").read_text(encoding="utf-8")
 balance = 0

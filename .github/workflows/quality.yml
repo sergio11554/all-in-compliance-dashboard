@@ -169,7 +169,7 @@ jobs:
 
       - name: Run encrypted S3 roundtrip
         env:
-          SFM_SMOKE_BASE_URL: http://127.0.0.1:5189
+          SFM_SMOKE_BASE_URL: http://127.0.0.1:5173
           ISMS_ADMIN_PASSWORD: Storage-Smoke-Admin-2026!
         run: docker exec -e SFM_SMOKE_BASE_URL -e ISMS_ADMIN_PASSWORD sfm-storage-app python /app/scripts/storage_smoke.py
 

@@ -221,7 +221,7 @@ class BackendSSOIntegrationTests(unittest.TestCase):
             "name": "SSO Customer",
             "slug": "sso-customer",
             "adminUsername": "sso.customer.admin",
-            "adminPassword": "SSO-Customer-Admin-2026!",
+            "adminPassword": "Violet-Orbit-4729!Test",
         }, csrf=True)
         self.assertEqual(status, 201)
         tenant_id = tenant_payload["tenant"]["id"]
