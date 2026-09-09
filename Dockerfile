@@ -22,6 +22,8 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY backend_app.py /app/backend_app.py
 COPY database.py /app/database.py
+COPY intune_connector.py /app/intune_connector.py
+COPY intune_sync.py /app/intune_sync.py
 COPY storage.py /app/storage.py
 COPY oidc_auth.py /app/oidc_auth.py
 COPY malware_scan.py /app/malware_scan.py

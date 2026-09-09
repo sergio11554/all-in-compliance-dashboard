@@ -61,6 +61,7 @@ node --check frontend-current/project-plan-engine.js
 node --check frontend-current/document-engine.js
 node --check frontend-current/workspace-merge.js
 node --check frontend-current/app.js
+node --check frontend-current/intune.js
 
 echo "[5/6] CSS structure"
 node <<'NODE'
@@ -105,6 +106,6 @@ console.log('CSS structure OK');
 NODE
 
 echo "[6/6] Backend compilation"
-python3 -m py_compile backend_app.py database.py storage.py oidc_auth.py malware_scan.py scripts/migrate_file_storage.py scripts/storage_smoke.py scripts/restore_system_backup.py scripts/restore_drill_verify.py scripts/production_preflight.py
+python3 -m py_compile backend_app.py database.py storage.py oidc_auth.py malware_scan.py intune_connector.py intune_sync.py scripts/migrate_file_storage.py scripts/storage_smoke.py scripts/tenant_acceptance.py scripts/restore_system_backup.py scripts/restore_drill_verify.py scripts/production_preflight.py
 
 echo "All checks passed."

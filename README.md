@@ -6,10 +6,15 @@ Die Plattform ersetzt keine fachliche, rechtliche oder Audit-Bewertung. Automati
 
 ## Wichtigste Funktionen
 
+- Microsoft-Intune-Pilot: App-Konfiguration mit Verbindungstest direkt in der Plattform,
+  lesender Geräteabruf, Importvorschau, Asset-Übernahme und
+  ausdrücklich aktivierbarer Stundenabgleich. Einrichtung und offene Live-Abnahme:
+  [INTUNE.md](INTUNE.md). Die Browser-Testvorschau speichert keine Kundendaten.
+
 - Kuratiertes Dashboard und Management-Cockpit mit Risiken, Fristen, Entscheidungen und Compliance-Spuren
 - Geführter Kundenmodus und chronologischer Projektstrukturplan
 - Review Center für Einreichungen, Nacharbeit, Freigaben und Audit-Blocker
-- Auditpaket-Gate mit klarer Trennung zwischen formaler Vorbereitung und Beraterfreigabe
+- Serverseitiges Auditpaket-Gate mit revisionsgebundener Beraterfreigabe und geschuetztem ZIP-Export
 - Dokumentation, verschlüsselte Nachweisablage, Versionierung und Audit Trail
 - Register für Assets, Risiken, Lieferanten, Policies, Rechtsanforderungen, Incidents und Verträge
 - ISO-27001-Arbeitsbereich, SoA-Matrix, Auditmatrix und NIS-2-Navigator
@@ -84,6 +89,16 @@ Es gibt keinen separaten Frontend-Build: Das Frontend wird als statische Anwendu
 docker compose --env-file .env.example config --quiet
 docker build -t sfm-compliance:local .
 ```
+
+Reproduzierbare Staging-Abnahme mit PostgreSQL, S3-kompatiblem Speicher und ClamAV:
+
+```bash
+./scripts/staging_stack.sh up
+./scripts/staging_stack.sh verify
+./scripts/staging_stack.sh reset
+```
+
+`verify` fuehrt die Infrastruktur-Smoke-Tests und einen echten Mandantenablauf aus. Der Lauf legt zwei isolierte Testmandanten an und prueft Admin-Passwortwechsel, Kundeneinladung, Workspace-Persistenz, Nachweis-Upload, Kunden-Einreichung, Beraterpruefung, Nacharbeit, erneute Einreichung, Beraterfreigabe, Auditor-Lesezugriff, Tenant-Export, Audit-Integritaet und negative Fremdmandanten-Zugriffe. Das Ergebnis ist eine technische Abnahme und keine fachliche ISO-, NIS-2- oder Audit-Freigabe.
 
 ## Produktionsvorbereitung
 

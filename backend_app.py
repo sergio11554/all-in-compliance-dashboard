@@ -26,6 +26,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from database import Database
+from intune_connector import IntuneError, setup_transport_allowed
+from intune_sync import IntuneSync
 from malware_scan import scanner_from_env
 from oidc_auth import OIDCError, authorization_url, exchange_code, load_providers, new_login_values, public_provider
 from storage import StorageError, storage_from_env
@@ -320,6 +322,16 @@ BACKGROUND_JOB_MAX_ATTEMPTS = env_int("ISMS_JOB_MAX_ATTEMPTS", 3, 1, 10)
 BACKGROUND_JOB_STOP = threading.Event()
 BACKGROUND_JOB_WORKER_ID = f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
 BACKGROUND_JOB_TYPES = {
+    "intune_preview": {
+        "label": "Intune-Importvorschau",
+        "description": "Liest das Intune-Inventar ohne den Workspace zu veraendern.",
+        "tenantScoped": True,
+    },
+    "intune_sync": {
+        "label": "Intune-Geraete synchronisieren",
+        "description": "Aktualisiert technische Asset-Daten nach expliziter Freigabe.",
+        "tenantScoped": True,
+    },
     "operations_alert_refresh": {
         "label": "Betriebsprüfung aktualisieren",
         "description": "Prüft technische Betriebsalarme im Hintergrund.",
@@ -653,6 +665,16 @@ def decrypt(nonce, payload):
     if not hmac.compare_digest(tag, expected):
         raise ValueError("file integrity check failed")
     return xor_bytes(cipher, stream(key, nonce, len(cipher)))
+
+
+def intune_service():
+    return IntuneSync(
+        database=DATABASE, connect=conn,
+        seal=lambda content: tuple(b64(part) for part in encrypt(content)),
+        unseal=lambda nonce, content: decrypt(unb64(nonce), unb64(content)),
+        audit=audit, snapshot=insert_state_snapshot,
+        validate=workspace_state_validation_report, max_bytes=MAX_JSON,
+    )
 
 
 def cookie_value(token, max_age=SESSION_SECONDS):
@@ -1520,6 +1542,240 @@ def workspace_overview_metrics(state):
         "openPolicies": open_policies,
         "openRisks": open_risks,
         "onboardingCompleted": bool(onboarding.get("completed")),
+    }
+
+
+AUDIT_PACKAGE_MATERIAL_KEYS = (
+    "documents",
+    "assets",
+    "risks",
+    "legal",
+    "suppliers",
+    "policies",
+    "incidents",
+    "contracts",
+    "tasks",
+    "projectPlan",
+    "templateDrafts",
+    "soa",
+    "gaps",
+    "auditFindings",
+    "managementReview",
+    "internalAuditPlan",
+)
+AUDIT_PACKAGE_INTERNAL_FIELDS = {
+    "beraterkommentarintern",
+    "consultantinternalcomment",
+    "internalcomment",
+    "internalconsultantcomment",
+}
+
+
+def audit_package_record_title(record, fallback):
+    if not isinstance(record, dict):
+        return fallback
+    for key in ("name", "title", "riskId", "scenario", "controlId", "id"):
+        value = str(record.get(key) or "").strip()
+        if value:
+            return value[:240]
+    return fallback
+
+
+def audit_package_record_approved(record):
+    if not isinstance(record, dict):
+        return False
+    values = (
+        record.get("reviewStatus"),
+        record.get("approval"),
+        record.get("approvalStatus"),
+        record.get("status"),
+    )
+    approved = {
+        "approved",
+        "beraterfreigegeben",
+        "freigegeben",
+        "freigegeben durch berater/admin",
+    }
+    return any(normalized_submission_status(value) in approved for value in values)
+
+
+def audit_package_record_relevant(record):
+    if not isinstance(record, dict):
+        return False
+    return bool(record.get("auditRelevant") or record.get("auditRelevance")) \
+        or normalized_submission_status(record.get("reviewStatus")) == "auditrelevant"
+
+
+def audit_package_risk_is_critical(record):
+    if not isinstance(record, dict):
+        return False
+    try:
+        score = float(record.get("likelihood") or 0) * float(record.get("impact") or 0)
+    except (TypeError, ValueError):
+        score = 0
+    labels = {
+        normalized_submission_status(record.get("level")),
+        normalized_submission_status(record.get("status")),
+        normalized_submission_status(record.get("criticality")),
+    }
+    return score >= 10 or bool(labels.intersection({"hoch", "sehr hoch", "kritisch", "high", "critical"}))
+
+
+def audit_package_material_state(state):
+    if not isinstance(state, dict):
+        return {}
+    return {
+        key: state.get(key)
+        for key in AUDIT_PACKAGE_MATERIAL_KEYS
+        if key in state
+    }
+
+
+def audit_package_fingerprint(state):
+    payload = canonical_workspace_value(audit_package_material_state(state)).encode("utf-8")
+    return f"pkg-{sha(payload)[:32]}"
+
+
+def audit_package_public_value(value):
+    if isinstance(value, dict):
+        return {
+            key: audit_package_public_value(item)
+            for key, item in value.items()
+            if normalized_submission_key(key) not in AUDIT_PACKAGE_INTERNAL_FIELDS
+        }
+    if isinstance(value, list):
+        return [audit_package_public_value(item) for item in value]
+    return value
+
+
+def audit_package_gate_report(state):
+    state = state if isinstance(state, dict) else {}
+    blockers = []
+    category_counts = {
+        "auditRelevantEvidence": 0,
+        "criticalRisks": 0,
+        "soa": 0,
+        "policies": 0,
+        "workTemplates": 0,
+        "capa": 0,
+        "explicit": 0,
+    }
+
+    def add(category, code, record, message, fallback):
+        title = audit_package_record_title(record, fallback)
+        blocker_id = str((record or {}).get("id") or (record or {}).get("controlId") or title)
+        key = f"{category}:{blocker_id}"
+        if any(item["key"] == key for item in blockers):
+            return
+        category_counts[category] += 1
+        blockers.append({
+            "key": key,
+            "code": code,
+            "category": category,
+            "title": title,
+            "message": message,
+        })
+
+    for document in workspace_list(state, "documents"):
+        if document.get("status") == "Quelle":
+            continue
+        if audit_package_record_relevant(document) and not audit_package_record_approved(document):
+            add("auditRelevantEvidence", "evidence_not_approved", document, "Auditrelevanter Nachweis ist nicht durch Berater/Admin freigegeben.", "Nachweis")
+
+    for risk in workspace_list(state, "risks"):
+        treatment = str(risk.get("treatment") or risk.get("measure") or "").strip()
+        if audit_package_risk_is_critical(risk) and (not treatment or not audit_package_record_approved(risk)):
+            add("criticalRisks", "critical_risk_open", risk, "Kritisches Risiko hat keine geprüfte Behandlung und Freigabe.", "Risiko")
+
+    for record in workspace_list(state, "soa"):
+        if audit_package_record_relevant(record) and not audit_package_record_approved(record):
+            add("soa", "soa_not_approved", record, "Auditrelevanter SoA-Eintrag ist nicht geprüft.", "SoA-Eintrag")
+
+    for policy in workspace_list(state, "policies"):
+        if audit_package_record_relevant(policy) and not audit_package_record_approved(policy):
+            add("policies", "policy_not_approved", policy, "Policy mit Auditbezug ist nicht freigegeben.", "Policy")
+
+    open_review_statuses = {
+        "abgelehnt",
+        "auditrelevant",
+        "in beraterpruefung",
+        "in beraterprüfung",
+        "nacharbeit noetig",
+        "nacharbeit nötig",
+        "vom kunden eingereicht",
+    }
+    for draft in workspace_list(state, "templateDrafts"):
+        status = normalized_submission_status(draft.get("reviewStatus") or draft.get("status"))
+        if (audit_package_record_relevant(draft) or status in open_review_statuses) and not audit_package_record_approved(draft):
+            add("workTemplates", "template_not_approved", draft, "Arbeitsvorlage wartet auf Prüfung oder Nacharbeit.", "Arbeitsvorlage")
+
+    for finding in workspace_list(state, "auditFindings"):
+        if audit_package_record_relevant(finding) and not audit_package_record_approved(finding):
+            add("capa", "capa_not_approved", finding, "Auditrelevante Korrekturmaßnahme ist nicht freigegeben.", "Korrekturmaßnahme")
+
+    for singleton_key, fallback in (("managementReview", "Managementbewertung"), ("internalAuditPlan", "Interne Auditplanung")):
+        record = state.get(singleton_key)
+        if isinstance(record, dict) and audit_package_record_relevant(record) and not audit_package_record_approved(record):
+            add("explicit", f"{singleton_key}_not_approved", record, f"{fallback} ist auditrelevant und nicht freigegeben.", fallback)
+
+    explicit_collections = (
+        "documents", "assets", "risks", "legal", "suppliers", "policies",
+        "incidents", "contracts", "tasks", "projectPlan", "soa", "gaps",
+    )
+    for collection in explicit_collections:
+        for record in workspace_list(state, collection):
+            if record.get("auditBlocker") and not audit_package_record_approved(record):
+                add("explicit", "explicit_audit_blocker", record, "Expliziter Audit-Blocker ist noch offen.", "Audit-Blocker")
+
+    criteria = [
+        {"key": key, "open": category_counts[key]}
+        for key in ("auditRelevantEvidence", "criticalRisks", "soa", "policies", "workTemplates", "capa", "explicit")
+    ]
+    return {
+        "formalGateClear": not blockers,
+        "blockerCount": len(blockers),
+        "blockers": blockers,
+        "criteria": criteria,
+    }
+
+
+def audit_package_status(state, revision=None):
+    gate = audit_package_gate_report(state)
+    fingerprint = audit_package_fingerprint(state)
+    package = state.get("auditPackage") if isinstance(state, dict) and isinstance(state.get("auditPackage"), dict) else {}
+    approvals = package.get("approvals") if isinstance(package.get("approvals"), list) else []
+    current = next(
+        (
+            item for item in approvals
+            if isinstance(item, dict)
+            and item.get("status") == "beraterfreigegeben"
+            and item.get("fingerprint") == fingerprint
+        ),
+        None,
+    )
+    latest = approvals[0] if approvals and isinstance(approvals[0], dict) else None
+    advisor_approved = bool(current and gate["formalGateClear"])
+    if advisor_approved:
+        label = "beraterfreigegeben"
+    elif gate["formalGateClear"]:
+        label = "formal_vorbereitet"
+    else:
+        label = "vorbereitet_mit_blockern"
+    return {
+        **gate,
+        "fingerprint": fingerprint,
+        "workspaceRevision": revision,
+        "advisorApproved": advisor_approved,
+        "exportReady": advisor_approved,
+        "approvalStale": bool(latest and not current),
+        "status": label,
+        "approval": current,
+        "latestApproval": latest,
+        "message": (
+            "Auditpaket ist durch Berater/Admin freigegeben und exportbereit."
+            if advisor_approved
+            else "Auditpaket ist vorbereitet, aber noch nicht durch den Berater freigegeben."
+        ),
     }
 
 
@@ -3190,16 +3446,20 @@ def run_background_job(job_id):
         if not row or row["status"] not in {"queued", "retry"}:
             return False
         attempts = int(row["attempts"] or 0) + 1
-        db.execute(
-            "UPDATE background_jobs SET status='running',attempts=?,locked_at=?,locked_by=?,updated_at=?,last_error=NULL WHERE id=?",
+        claimed = db.execute(
+            "UPDATE background_jobs SET status='running',attempts=?,locked_at=?,locked_by=?,updated_at=?,last_error=NULL WHERE id=? AND status IN ('queued','retry')",
             (attempts, started_at, BACKGROUND_JOB_WORKER_ID, started_at, job_id),
         )
+        if claimed.rowcount != 1:
+            return False
         job = dict(row)
         job["attempts"] = attempts
 
     actor = job_actor(job)
     try:
-        if job["job_type"] == "operations_alert_refresh":
+        if job["job_type"] in {"intune_preview", "intune_sync"}:
+            result = intune_service().run(actor, automatic=job["job_type"] == "intune_sync")
+        elif job["job_type"] == "operations_alert_refresh":
             refreshed_at = run_operational_monitor(actor=actor, ip="job-worker", schedule_next=False)
             if not refreshed_at:
                 raise RuntimeError("operations monitor did not complete")
@@ -3239,8 +3499,14 @@ def run_background_job(job_id):
         return True
     except Exception as exc:
         error_text = metadata_value(str(exc), 500) or "background job failed"
+        if job["job_type"] in {"intune_preview", "intune_sync"} and not isinstance(exc, IntuneError):
+            error_text = "Intune-Verarbeitung fehlgeschlagen. Serverkonfiguration pruefen."
         final_failure = int(job["attempts"] or 0) >= int(job["max_attempts"] or BACKGROUND_JOB_MAX_ATTEMPTS)
+        if isinstance(exc, IntuneError) and not exc.retry_after:
+            final_failure = True
         next_attempt = None if final_failure else now() + min(3600, 30 * (2 ** max(0, int(job["attempts"] or 1) - 1)))
+        if isinstance(exc, IntuneError) and exc.retry_after and not final_failure:
+            next_attempt = max(next_attempt, now() + exc.retry_after)
         status = "failed" if final_failure else "retry"
         with conn() as db:
             db.execute(
@@ -3259,6 +3525,7 @@ def run_background_job(job_id):
 def run_background_job_queue():
     if not BACKGROUND_JOB_WORKER_ENABLED:
         return 0
+    intune_service().queue_due(enqueue_background_job)
     timestamp = now()
     with conn() as db:
         db.execute(
@@ -3438,6 +3705,7 @@ def live_event_type(action):
         "asset_created",
         "asset_updated",
         "asset_deleted",
+        "intune_assets_synced",
         "risk_created",
         "risk_updated",
         "risk_deleted",
@@ -3980,6 +4248,12 @@ class App(BaseHTTPRequestHandler):
             self.handle_get_state()
         elif path == "/api/state/meta":
             self.handle_get_state_meta()
+        elif path == "/api/audit-package/status":
+            self.handle_audit_package_status()
+        elif path == "/api/audit-package/export":
+            self.handle_export_audit_package()
+        elif path == "/api/integrations/intune":
+            self.handle_intune("status")
         elif path == "/api/assets":
             self.handle_list_assets()
         elif path == "/api/risks":
@@ -4169,6 +4443,10 @@ class App(BaseHTTPRequestHandler):
             self.handle_create_state_snapshot()
         elif path == "/api/state/restore":
             self.handle_restore_state_snapshot()
+        elif path in {"/api/integrations/intune/preview", "/api/integrations/intune/apply", "/api/integrations/intune/schedule", "/api/integrations/intune/configure", "/api/integrations/intune/disconnect"}:
+            self.handle_intune(path.rsplit("/", 1)[-1])
+        elif path == "/api/audit-package/approve":
+            self.handle_approve_audit_package()
         elif path == "/api/assets":
             self.handle_create_asset()
         elif path == "/api/risks":
@@ -4324,7 +4602,9 @@ class App(BaseHTTPRequestHandler):
             path = "/index.html"
         decoded = urllib.parse.unquote(path).lstrip("/")
         target = (STATIC_BASE / decoded).resolve()
-        if not is_within(STATIC_BASE, target) or target.suffix.lower() not in STATIC_EXT or not target.exists():
+        intune_config = Path(os.environ.get("ISMS_INTUNE_CONFIG_FILE") or DATA / "intune-config.json").resolve()
+        if (not is_within(STATIC_BASE, target) or is_within(DATA, target)
+                or target == intune_config or target.suffix.lower() not in STATIC_EXT or not target.is_file()):
             self.send_error_json(404, "not found", head_only=head_only)
             return
         content = target.read_bytes()
@@ -4958,6 +5238,335 @@ class App(BaseHTTPRequestHandler):
             "updatedAt": row["updated_at"],
             "updatedBy": row["updated_by_username"],
         })
+
+    def handle_audit_package_status(self):
+        user = self.require_user(permission="readWorkspace")
+        if not user:
+            return
+        with conn() as db:
+            row = db.execute(
+                "SELECT state_json,revision,updated_at FROM tenant_workspace_state WHERE tenant_id = ?",
+                (user["tenant_id"],),
+            ).fetchone()
+        if not row:
+            self.send_json({
+                "error": "workspace_not_initialized",
+                "message": "Der Workspace muss zuerst durch Berater/Admin angelegt werden.",
+            }, status=409)
+            return
+        try:
+            state = json.loads(row["state_json"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            self.send_error_json(500, "stored workspace state is invalid")
+            return
+        status = audit_package_status(state, int(row["revision"] or 1))
+        status["updatedAt"] = row["updated_at"]
+        self.send_json({"auditPackage": status})
+
+    def handle_approve_audit_package(self):
+        user = self.require_user(permission="reviewDocument")
+        if not user:
+            return
+        if user.get("role") not in {"admin", "consultant"}:
+            self.send_error_json(403, "audit package approval requires admin or consultant role")
+            return
+        try:
+            payload = self.json_body()
+        except Exception:
+            self.send_error_json(400, "invalid json")
+            return
+        expected_revision = payload.get("expectedRevision")
+        expected_fingerprint = str(payload.get("fingerprint") or "").strip()
+        if expected_revision is not None and (
+            not isinstance(expected_revision, int)
+            or isinstance(expected_revision, bool)
+            or expected_revision < 1
+        ):
+            self.send_error_json(400, "expectedRevision must be a positive integer or null")
+            return
+
+        approved_at = now()
+        with conn() as db:
+            DATABASE.begin_workspace_write(db)
+            row = db.execute(
+                "SELECT state_json,revision,updated_at,updated_by FROM tenant_workspace_state WHERE tenant_id = ?",
+                (user["tenant_id"],),
+            ).fetchone()
+            if not row:
+                self.send_json({
+                    "error": "workspace_not_initialized",
+                    "message": "Der Workspace muss zuerst durch Berater/Admin angelegt werden.",
+                }, status=409)
+                return
+            current_revision = int(row["revision"] or 1)
+            if expected_revision is not None and expected_revision != current_revision:
+                self.send_json({
+                    "error": "workspace_conflict",
+                    "message": "Workspace wurde zwischenzeitlich geändert.",
+                    "expectedRevision": expected_revision,
+                    "currentRevision": current_revision,
+                }, status=409)
+                return
+            try:
+                state = json.loads(row["state_json"])
+            except (TypeError, ValueError, json.JSONDecodeError):
+                self.send_error_json(500, "stored workspace state is invalid")
+                return
+            current_status = audit_package_status(state, current_revision)
+            if expected_fingerprint and expected_fingerprint != current_status["fingerprint"]:
+                self.send_json({
+                    "error": "audit_package_changed",
+                    "message": "Das Auditpaket wurde seit der Prüfung geändert. Bitte erneut prüfen.",
+                    "auditPackage": current_status,
+                }, status=409)
+                return
+            if not current_status["formalGateClear"]:
+                audit(db, user, "audit_package_approval_blocked", "audit_package", user["tenant_id"], {
+                    "fingerprint": current_status["fingerprint"],
+                    "blockerCount": current_status["blockerCount"],
+                    "revision": current_revision,
+                }, self.client_address[0])
+                self.send_json({
+                    "error": "audit_package_blocked",
+                    "message": "Auditpaket ist vorbereitet, aber noch nicht durch den Berater freigegeben.",
+                    "auditPackage": current_status,
+                }, status=409)
+                return
+            proposed_state = json.loads(json.dumps(state, ensure_ascii=False))
+            package = proposed_state.get("auditPackage")
+            if not isinstance(package, dict):
+                package = {}
+                proposed_state["auditPackage"] = package
+            approvals = package.get("approvals")
+            if not isinstance(approvals, list):
+                approvals = []
+            approval = {
+                "id": f"audit-package-approval-{uuid.uuid4().hex}",
+                "status": "beraterfreigegeben",
+                "fingerprint": current_status["fingerprint"],
+                "approvedAt": approved_at,
+                "approvedBy": user["username"],
+                "approvedByRole": user["role"],
+                "workspaceRevision": current_revision,
+                "comment": str(payload.get("comment") or "").strip()[:2000],
+            }
+            package["approvals"] = [approval] + [
+                item for item in approvals
+                if isinstance(item, dict) and item.get("fingerprint") != approval["fingerprint"]
+            ][:49]
+            package["status"] = "beraterfreigegeben"
+            package["updatedAt"] = approved_at
+            package["updatedBy"] = user["username"]
+            state_json = json.dumps(proposed_state, ensure_ascii=False, separators=(",", ":"))
+            validation = workspace_state_validation_report(proposed_state, state_json)
+            if not validation["valid"]:
+                self.send_json({"error": "workspace state is incomplete", "validation": validation}, status=400)
+                return
+            snapshot_id = insert_state_snapshot(
+                db,
+                user["tenant_id"],
+                row["state_json"],
+                row["updated_by"],
+                "before_audit_package_approval",
+            )
+            new_revision = current_revision + 1
+            db.execute(
+                "UPDATE tenant_workspace_state SET state_json = ?,updated_at = ?,updated_by = ?,revision = ? WHERE tenant_id = ?",
+                (state_json, approved_at, user["id"], new_revision, user["tenant_id"]),
+            )
+            audit(db, user, "audit_package_approved", "audit_package", user["tenant_id"], {
+                "approvalId": approval["id"],
+                "fingerprint": approval["fingerprint"],
+                "previousRevision": current_revision,
+                "revision": new_revision,
+                "snapshotId": snapshot_id,
+            }, self.client_address[0])
+
+        result = audit_package_status(proposed_state, new_revision)
+        self.send_json({"ok": True, "auditPackage": result, "approval": approval})
+
+    def handle_export_audit_package(self):
+        user = self.require_user(permission="downloadFile")
+        if not user:
+            return
+        with conn() as db:
+            row = db.execute(
+                "SELECT state_json,revision,updated_at FROM tenant_workspace_state WHERE tenant_id = ?",
+                (user["tenant_id"],),
+            ).fetchone()
+            tenant = db.execute(
+                "SELECT id,name,slug FROM tenants WHERE id = ?",
+                (user["tenant_id"],),
+            ).fetchone()
+            file_rows = db.execute(
+                "SELECT id,original_name,stored_name,content_type,size,sha256,nonce,uploaded_at,document_id,"
+                "version_label,linked_to,classification FROM files "
+                "WHERE tenant_id = ? AND quarantined = 0 ORDER BY uploaded_at,id",
+                (user["tenant_id"],),
+            ).fetchall()
+            if not row or not tenant:
+                self.send_json({
+                    "error": "workspace_not_initialized",
+                    "message": "Der Workspace muss zuerst durch Berater/Admin angelegt werden.",
+                }, status=409)
+                return
+            try:
+                state = json.loads(row["state_json"])
+            except (TypeError, ValueError, json.JSONDecodeError):
+                self.send_error_json(500, "stored workspace state is invalid")
+                return
+            package_status = audit_package_status(state, int(row["revision"] or 1))
+            if not package_status["exportReady"]:
+                self.send_json({
+                    "error": "audit_package_not_approved",
+                    "message": "Auditpaket ist vorbereitet, aber noch nicht durch den Berater freigegeben.",
+                    "auditPackage": package_status,
+                }, status=409)
+                return
+
+            estimated_bytes = len(row["state_json"].encode("utf-8")) + sum(int(item["size"] or 0) for item in file_rows)
+            if estimated_bytes > MAX_TENANT_EXPORT:
+                self.send_json({
+                    "error": "audit package exceeds configured size limit",
+                    "estimatedBytes": estimated_bytes,
+                    "limitBytes": MAX_TENANT_EXPORT,
+                }, status=413)
+                return
+
+            exported_files = []
+            decrypted_files = []
+            for item in file_rows:
+                try:
+                    content = decrypt(unb64(item["nonce"]), FILE_STORAGE.get(item["stored_name"]))
+                except Exception:
+                    self.send_json({
+                        "error": "audit package blocked because a file failed integrity verification",
+                        "fileId": item["id"],
+                        "name": item["original_name"],
+                    }, status=409)
+                    return
+                if sha(content) != item["sha256"]:
+                    self.send_json({
+                        "error": "audit package blocked because a file checksum does not match",
+                        "fileId": item["id"],
+                        "name": item["original_name"],
+                    }, status=409)
+                    return
+                archive_path = f"evidence/{str(item['id'])[:12]}-{safe_filename(item['original_name'])}"
+                decrypted_files.append((archive_path, content))
+                exported_files.append({
+                    "id": item["id"],
+                    "name": item["original_name"],
+                    "archivePath": archive_path,
+                    "contentType": item["content_type"],
+                    "size": item["size"],
+                    "sha256": item["sha256"],
+                    "uploadedAt": item["uploaded_at"],
+                    "documentId": item["document_id"] or "",
+                    "version": item["version_label"] or "",
+                    "linkedTo": item["linked_to"] or "",
+                    "classification": item["classification"] or "",
+                })
+
+            exported_at = now()
+            public_state = audit_package_public_value(audit_package_material_state(state))
+            manifest = {
+                "format": "sfm-compliance-audit-package-v1",
+                "tenant": {"id": tenant["id"], "name": tenant["name"], "slug": tenant["slug"]},
+                "exportedAt": exported_at,
+                "exportedBy": user["username"],
+                "fingerprint": package_status["fingerprint"],
+                "workspaceRevision": package_status["workspaceRevision"],
+                "advisorApproval": package_status["approval"],
+                "formalGate": {
+                    "clear": package_status["formalGateClear"],
+                    "criteria": package_status["criteria"],
+                },
+                "files": exported_files,
+                "notice": "Technisch vorbereitet und durch Berater/Admin freigegeben. Keine automatische Aussage zu ISO-Konformitaet, NIS-2-Erfuellung oder Auditbereitschaft.",
+            }
+            buffer = io.BytesIO()
+            try:
+                with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+                    archive.writestr("README.txt", (
+                        "SFM Compliance Auditpaket\n\n"
+                        "Das Paket wurde technisch zusammengestellt und explizit durch Berater/Admin freigegeben.\n"
+                        "Es ist keine automatische Aussage zu ISO-Konformitaet, NIS-2-Erfuellung oder Auditbereitschaft.\n"
+                    ))
+                    archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+                    archive.writestr("workspace/registers.json", json.dumps(public_state, ensure_ascii=False, indent=2))
+                    archive.writestr("evidence/index.json", json.dumps(exported_files, ensure_ascii=False, indent=2))
+                    for archive_path, content in decrypted_files:
+                        archive.writestr(archive_path, content)
+            except Exception:
+                self.send_error_json(500, "audit package could not be created")
+                return
+            content = buffer.getvalue()
+            audit(db, user, "audit_package_exported", "audit_package", user["tenant_id"], {
+                "fingerprint": package_status["fingerprint"],
+                "workspaceRevision": package_status["workspaceRevision"],
+                "files": len(exported_files),
+                "bytes": len(content),
+            }, self.client_address[0])
+
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        filename = f"sfm-audit-package-{safe_filename(tenant['slug'])}-{stamp}.zip"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(content)
+
+    def handle_intune(self, action):
+        user = self.require_user(permission="readWorkspace" if action == "status" else "admin")
+        if not user:
+            return
+        service = intune_service()
+        try:
+            if action == "status":
+                result = service.status(user["tenant_id"])
+                result["workerEnabled"] = BACKGROUND_JOB_WORKER_ENABLED
+                result["canManage"] = user["role"] == "admin"
+                result["setupTransportAllowed"] = setup_transport_allowed(self.public_base_url(), self.client_address[0])
+            else:
+                payload = self.json_body()
+                if not isinstance(payload, dict):
+                    raise IntuneError("JSON-Objekt erwartet.")
+                if action in {"configure", "disconnect"}:
+                    if not setup_transport_allowed(self.public_base_url(), self.client_address[0]):
+                        raise IntuneError("App-Zugang nur ueber HTTPS oder auf localhost einrichten.", 403)
+                    with conn() as db:
+                        DATABASE.begin_workspace_write(db)
+                        service.configure(db, user, payload, remove=action == "disconnect")
+                    result = {"saved": action == "configure"}
+                elif action == "apply":
+                    preview_id = payload.get("previewId")
+                    if not isinstance(preview_id, str) or not preview_id:
+                        raise IntuneError("previewId ist erforderlich.")
+                    result = service.apply(user, preview_id=preview_id)
+                elif action == "preview":
+                    if not BACKGROUND_JOB_WORKER_ENABLED:
+                        raise IntuneError("Hintergrunddienst ist deaktiviert.", 409)
+                    with conn() as db:
+                        DATABASE.begin_workspace_write(db)
+                        job_id = service.enqueue(db, user, enqueue_background_job)
+                    result = {"jobId": job_id}
+                else:
+                    if not isinstance(payload.get("enabled"), bool):
+                        raise IntuneError("enabled muss ein Wahrheitswert sein.")
+                    if payload["enabled"] and not BACKGROUND_JOB_WORKER_ENABLED:
+                        raise IntuneError("Hintergrunddienst ist deaktiviert.", 409)
+                    with conn() as db:
+                        DATABASE.begin_workspace_write(db)
+                        service.schedule(db, user, payload["enabled"])
+                    result = {"enabled": payload["enabled"]}
+            self.send_json(result, status=202 if action == "preview" else 200)
+        except IntuneError as exc:
+            self.send_error_json(exc.status, str(exc))
+        except (ValueError, TypeError):
+            self.send_error_json(400, "Intune-Anfrage oder gespeicherte Vorschau ungueltig.")
 
     def handle_list_assets(self):
         user = self.require_user(permission="readWorkspace")
@@ -11010,7 +11619,7 @@ class App(BaseHTTPRequestHandler):
             return
         payload = self.json_body()
         job_type = metadata_value(payload.get("jobType"), 120)
-        if job_type not in BACKGROUND_JOB_TYPES:
+        if job_type not in BACKGROUND_JOB_TYPES or job_type in {"intune_preview", "intune_sync"}:
             self.send_error_json(400, "unsupported background job type")
             return
         try:

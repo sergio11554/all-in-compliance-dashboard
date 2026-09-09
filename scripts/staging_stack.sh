@@ -124,6 +124,15 @@ smoke() {
   SFM_SMOKE_BASE_URL="${BASE_URL}" python3 "${ROOT}/scripts/postgres_smoke.py"
 }
 
+acceptance() {
+  load_env
+  SFM_ACCEPTANCE_BASE_URL="${BASE_URL}" \
+  SFM_ACCEPTANCE_EXPECT_DATABASE="postgres" \
+  SFM_ACCEPTANCE_EXPECT_STORAGE="s3" \
+  SFM_ACCEPTANCE_EXPECT_MALWARE="clamav" \
+    python3 "${ROOT}/scripts/tenant_acceptance.py"
+}
+
 command="${1:-status}"
 ensure_docker
 ensure_env
@@ -146,6 +155,17 @@ case "${command}" in
     wait_for_dependencies
     smoke
     ;;
+  acceptance)
+    wait_for_health
+    wait_for_dependencies
+    acceptance
+    ;;
+  verify)
+    wait_for_health
+    wait_for_dependencies
+    smoke
+    acceptance
+    ;;
   down)
     compose down --remove-orphans
     ;;
@@ -155,7 +175,7 @@ case "${command}" in
     echo "Nur der isolierte Staging-Stack und seine Staging-Secrets wurden entfernt."
     ;;
   *)
-    echo "Verwendung: $0 {up|status|smoke|down|reset}" >&2
+    echo "Verwendung: $0 {up|status|smoke|acceptance|verify|down|reset}" >&2
     exit 2
     ;;
 esac

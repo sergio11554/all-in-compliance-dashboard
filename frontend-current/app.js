@@ -2540,6 +2540,12 @@ let backendSync = {
   mode: "local",
   validation: null
 };
+let backendAuditPackageStatus = {
+  loaded: false,
+  loading: false,
+  error: "",
+  data: null
+};
 let backendNotificationData = {
   loaded: false,
   loading: false,
@@ -2714,6 +2720,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeLanguageMenu();
 });
 document.getElementById("exportBtn")?.addEventListener("click", () => exportData());
+document.getElementById("importBtn")?.addEventListener("click", () => document.getElementById("importInput")?.click());
 document.getElementById("importInput")?.addEventListener("change", importData);
 mobileNavToggle?.addEventListener("click", () => {
   const open = !sidebar?.classList.contains("mobile-nav-open");
@@ -3126,10 +3133,10 @@ function removeCustomerRiskAnalysisArtifactsFromState(workspace = {}) {
 		      .filter(Boolean)
 		      .map((approval) => ({
 		        id: approval.id || crypto.randomUUID(),
-		        date: approval.date || today(),
-		        dateTime: approval.dateTime || "",
-		        by: approval.by || "SFM Compliance",
-		        role: approval.role || "",
+		        date: approval.date || (approval.approvedAt ? String(approval.approvedAt).slice(0, 10) : today()),
+		        dateTime: approval.dateTime || approval.approvedAt || "",
+		        by: approval.by || approval.approvedBy || "SFM Compliance",
+		        role: approval.role || approval.approvedByRole || "",
 		        status: approval.status || "beraterfreigegeben",
 		        comment: approval.comment || "",
 		        fingerprint: approval.fingerprint || "",
@@ -4161,6 +4168,7 @@ async function saveWorkspaceToBackendOnce() {
       clearPendingWorkspace();
     }
     resetWorkspaceConflictComparison();
+    await loadBackendAuditPackageStatus();
     refreshBackendSyncStatus();
     return true;
   } catch (error) {
@@ -4208,9 +4216,11 @@ async function saveWorkspaceToBackendOnce() {
 
 async function loadBackendWorkspaceState() {
   if (!backendSessionUser) return false;
+  const requestedScope = `${backendSessionUser.id}:${backendSessionUser.tenant?.id}`;
 
   try {
     const payload = await apiRequest("/api/state", { cache: "no-store" });
+    if (requestedScope !== `${backendSessionUser?.id}:${backendSessionUser?.tenant?.id}`) return false;
 
     if (payload.state && typeof payload.state === "object") {
       suppressBackendSave = true;
@@ -4237,6 +4247,7 @@ async function loadBackendWorkspaceState() {
         validation: payload.validation || null
       };
       clearPendingWorkspace();
+      await loadBackendAuditPackageStatus();
       return true;
     }
 
@@ -6083,7 +6094,7 @@ function formatBerlinDataState(date = new Date()) {
 
 function refreshBerlinDataState() {
   document.querySelectorAll("[data-live-berlin-time]").forEach((node) => {
-    node.textContent = `Datenstand: ${formatBerlinDataState()} Uhr`;
+    node.textContent = `Berlin: ${formatBerlinDataState()} Uhr`;
   });
 }
 
@@ -9772,7 +9783,13 @@ function renderWorkspaceContextBar(view = currentView) {
     : `data-jump="${escapeHtml(nextTarget)}"`;
 
   return `
-    <section class="workspace-context-bar ${view === "dashboard" ? "dashboard-context" : ""}">
+    <section class="workspace-project-context" aria-label="${escapeHtml(t("context.eyebrow"))}">
+      <details class="workspace-project-details">
+        <summary>
+          <span><small>${escapeHtml(t("context.eyebrow"))}</small><strong>${escapeHtml(tenantName)}</strong></span>
+          <span class="workspace-project-role">${escapeHtml(roleLabel)}<span data-backend-sync-status>${escapeHtml(syncText)}</span></span>
+        </summary>
+        <div class="workspace-context-bar">
       <div class="workspace-context-main">
         <span class="eyebrow">${escapeHtml(t("context.eyebrow"))}</span>
         <h3>${escapeHtml(tenantName)}</h3>
@@ -9783,7 +9800,6 @@ function renderWorkspaceContextBar(view = currentView) {
           ${lastEditor ? `<span>Letzte Bearbeitung: <strong>${escapeHtml(lastEditor)}</strong></span>` : ""}
           <span>${escapeHtml(t("context.approval"))}: <strong>${escapeHtml(t("context.approvalValue"))}</strong></span>
         </p>
-        ${renderWorkspaceLiveStrip()}
         <button class="workspace-context-next" type="button" ${nextActionAttrs}>
           <span>${escapeHtml(t("context.nextStep"))}</span>
           <strong>${escapeHtml(nextTitle)}</strong>
@@ -9804,6 +9820,9 @@ function renderWorkspaceContextBar(view = currentView) {
         <button class="quiet-button" type="button" data-jump="documents">${escapeHtml(canEditWorkspace() ? t("context.uploadEvidence") : t("context.viewEvidence"))}</button>
         <button class="quiet-button" type="button" data-jump="project">${escapeHtml(t("context.projectPlan"))}</button>
       </div>
+        </div>
+      </details>
+      ${renderWorkspaceLiveStrip()}
     </section>
   `;
 }
@@ -10259,196 +10278,6 @@ function renderDashboardExecutiveBrief(stats = dashboardStats(), reviewMetrics =
   `;
 }
 
-function executiveDemoRisks() {
-  return [
-    {
-      title: "Privilegierte Konten ohne vollständige MFA-Prüfung",
-      area: "IT Security",
-      scope: "NHD / Daume Gruppe",
-      severity: "High",
-      owner: "IT Security",
-      action: "MFA-Status privilegierter Konten prüfen",
-      due: "30 Tage",
-      status: "In Bewertung",
-      decision: "Priorisierung bestätigen",
-      route: "risks"
-    },
-    {
-      title: "Kritischer Lieferant ohne aktuelle Prüfung",
-      area: "Third Party Risk",
-      scope: "Lieferanten / Cloud / Dienstleister",
-      severity: "High",
-      owner: "Einkauf / Legal",
-      action: "Lieferantenprüfung aktualisieren",
-      due: "30 Tage",
-      status: "In Umsetzung",
-      decision: "Eskalation oder Akzeptanz",
-      route: "suppliers"
-    },
-    {
-      title: "Systeme mit personenbezogenen Daten ohne aktuelle Dokumentation",
-      area: "Datenschutz / Data Governance",
-      scope: "Systeme und Datenbestände",
-      severity: "Medium",
-      owner: "Datenschutz / Fachbereich",
-      action: "Systemdokumentation aktualisieren",
-      due: "60 Tage",
-      status: "In Bewertung",
-      decision: "Owner bestätigen",
-      route: "documents"
-    },
-    {
-      title: "Überfälliger Policy Review",
-      area: "Corporate Governance",
-      scope: "Policies / Verfahren",
-      severity: "Medium",
-      owner: "Legal / Compliance",
-      action: "Policy Review durchführen",
-      due: "14 Tage",
-      status: "Überfällig",
-      decision: "Freigabeprozess bestätigen",
-      route: "policies"
-    },
-    {
-      title: "High-Risk-Finding ohne abgeschlossene Maßnahme",
-      area: "Audit / Findings",
-      scope: "Audit Follow-up",
-      severity: "High",
-      owner: "Fachbereich",
-      action: "Korrekturmaßnahme abschließen",
-      due: "21 Tage",
-      status: "In Umsetzung",
-      decision: "Managementeskalation prüfen",
-      route: "audit"
-    }
-  ];
-}
-
-function executiveDecisionItems() {
-  return [
-    {
-      title: "Risikoakzeptanz für verbleibendes IT-Risiko prüfen",
-      why: "Restrisiko, Priorität und Verantwortlichkeit müssen nachvollziehbar entschieden werden.",
-      owner: "Geschäftsführung / IT Security",
-      due: "14 Tage",
-      status: "In Bewertung",
-      next: "Entscheidung im Maßnahmenregister dokumentieren",
-      route: "risks"
-    },
-    {
-      title: "Kritischen Lieferanten priorisieren oder akzeptieren",
-      why: "Die Lieferantenprüfung ist nicht aktuell und kann Folgeentscheidungen auslösen.",
-      owner: "Einkauf / Legal",
-      due: "30 Tage",
-      status: "In Umsetzung",
-      next: "Review aktualisieren und Akzeptanz/Eskalation festhalten",
-      route: "suppliers"
-    },
-    {
-      title: "Policy Review freigeben",
-      why: "Überfällige Policies brauchen einen klaren Review- und Freigabeentscheid.",
-      owner: "Legal / Compliance",
-      due: "14 Tage",
-      status: "Überfällig",
-      next: "Policy Owner und Reviewdatum bestätigen",
-      route: "policies"
-    },
-    {
-      title: "Datenschutz-/Data-Governance-Owner bestätigen",
-      why: "Für Datenbestände und Systeme fehlt teils eine klare Verantwortlichkeit.",
-      owner: "Datenschutz / Fachbereich",
-      due: "60 Tage",
-      status: "Neu",
-      next: "Owner zuordnen und Systemdokumentation ergänzen",
-      route: "documents"
-    },
-    {
-      title: "Audit-Finding eskalieren oder schließen lassen",
-      why: "Ein High-Risk-Finding braucht eine Managemententscheidung zum Follow-up.",
-      owner: "Fachbereich / Berater",
-      due: "21 Tage",
-      status: "In Umsetzung",
-      next: "Maßnahme schließen oder Eskalation dokumentieren",
-      route: "audit"
-    }
-  ];
-}
-
-function executiveComplianceTracks() {
-  return [
-    {
-      title: "IT Security & Cyber Resilience",
-      items: ["Schwachstellen", "MFA", "Patches", "Backup-Restore-Tests", "Security Incidents", "Drittanbieterzugriffe"],
-      status: "In Bewertung",
-      open: 5,
-      hot: 2,
-      owner: "IT Security",
-      route: "risks"
-    },
-    {
-      title: "Data Governance & Datenschutz",
-      items: ["Data Owner", "Systemdokumentation", "DSFA/DPIA", "Klassifizierung", "Löschkonzepte", "Datenschutzvorfälle"],
-      status: "Neu",
-      open: 4,
-      hot: 1,
-      owner: "Datenschutz / Legal",
-      route: "documents"
-    },
-    {
-      title: "Corporate Governance & Legal Compliance",
-      items: ["Compliance-Maßnahmen", "Policy Reviews", "Schulungen", "Hinweisgeberfälle", "Board-/Committee-Actions"],
-      status: "Überfällig",
-      open: 3,
-      hot: 1,
-      owner: "Legal / Compliance",
-      route: "policies"
-    },
-    {
-      title: "Third Party & Supply Chain Risk",
-      items: ["Lieferanten", "Subunternehmer", "AVV/TOM-Prüfungen", "Sanktionen", "High-Risk Findings"],
-      status: "In Umsetzung",
-      open: 3,
-      hot: 1,
-      owner: "Einkauf / Legal",
-      route: "suppliers"
-    },
-    {
-      title: "Audit, Findings & Maßnahmen",
-      items: ["Findings", "überfällige Maßnahmen", "Wiederholungsfeststellungen", "fehlende Nachweise", "Follow-up"],
-      status: "In Bewertung",
-      open: 4,
-      hot: 2,
-      owner: "Berater / Fachbereich",
-      route: "auditpackage"
-    }
-  ];
-}
-
-function executiveDeadlineLanes() {
-  return [
-    {
-      label: "7 Tage",
-      items: [
-        { title: "Überfällige Policy Reviews priorisieren", area: "Corporate Governance", owner: "Legal / Compliance", due: "7 Tage", status: "Überfällig", route: "policies" },
-        { title: "Managemententscheidung für Audit-Blocker vorbereiten", area: "Audit / Findings", owner: "Berater / ISB", due: "7 Tage", status: "In Bewertung", route: "auditpackage" }
-      ]
-    },
-    {
-      label: "30 Tage",
-      items: [
-        { title: "MFA-Prüfung privilegierter Konten abschließen", area: "IT Security", owner: "IT Security", due: "30 Tage", status: "In Umsetzung", route: "risks" },
-        { title: "Kritischen Lieferanten aktualisiert prüfen", area: "Third Party Risk", owner: "Einkauf / Legal", due: "30 Tage", status: "In Umsetzung", route: "suppliers" }
-      ]
-    },
-    {
-      label: "90 Tage",
-      items: [
-        { title: "Compliance Cockpit KPIs stabilisieren", area: "Corporate Governance", owner: "Legal / IT", due: "90 Tage", status: "Neu", route: "executive" },
-        { title: "Quellsystem-Anbindungen priorisieren", area: "IT / Data", owner: "IT Security", due: "90 Tage", status: "Neu", route: "integrations" }
-      ]
-    }
-  ];
-}
 
 function executiveSeverityTone(value = "") {
   const normalized = String(value).toLowerCase();
@@ -10458,9 +10287,9 @@ function executiveSeverityTone(value = "") {
   return "active";
 }
 
-function executiveDetailItems({ demoRisks = [], decisions = [], overdueActions = [], flatDeadlines = [], tracks = [] } = {}) {
+function executiveDetailItems({ risks = [], decisions = [], overdueActions = [], flatDeadlines = [], tracks = [] } = {}) {
   return [
-    ...demoRisks.slice(0, 4).map((risk, index) => ({
+    ...risks.slice(0, 4).map((risk, index) => ({
       id: `risk-${index}`,
       type: "Top-Risiko",
       title: risk.title,
@@ -10480,10 +10309,10 @@ function executiveDetailItems({ demoRisks = [], decisions = [], overdueActions =
       type: "Überfällige Maßnahme",
       title: item.title,
       subtitle: item.meta,
-      owner: "Fachbereich / Berater",
+      owner: item.owner || "Nicht zugeordnet",
       status: "Überfällig",
       priority: `${item.overdue} Tage überfällig`,
-      due: "sofort prüfen",
+      due: item.due,
       why: "Überfällige Maßnahmen können Freigaben blockieren und sollten fachlich priorisiert werden.",
       customerAction: "Status, Maßnahme und Nachweis aktualisieren.",
       evidence: "Aufgabe, Maßnahme oder verknüpften Nachweis öffnen.",
@@ -10511,9 +10340,9 @@ function executiveDetailItems({ demoRisks = [], decisions = [], overdueActions =
       title: item.title,
       subtitle: `${item.area || item.lane || "Frist"} · ${item.owner || "Owner offen"}`,
       owner: item.owner || "Owner offen",
-      status: index === 0 ? "Überfällig" : "Fällig",
+      status: item.status,
       priority: item.lane || "Frist",
-      due: index === 0 ? "14 Mai" : index === 1 ? "21 Mai" : index === 2 ? "28 Mai" : "04 Jun",
+      due: item.due,
       why: "Diese Frist sollte verfolgt werden, damit offene Punkte rechtzeitig vorbereitet oder zurückgegeben werden.",
       customerAction: item.text || item.status || "Aufgabe prüfen und Status aktualisieren.",
       evidence: "Aufgabenstatus, Owner und Nachweisbezug prüfen.",
@@ -10527,7 +10356,7 @@ function executiveDetailItems({ demoRisks = [], decisions = [], overdueActions =
       subtitle: track.items.slice(0, 3).join(" · "),
       owner: track.owner,
       status: track.status,
-      priority: `${track.hot} kritisch · ${track.open} offen`,
+      priority: `${track.value} · ${track.hint}`,
       due: "laufend",
       why: "Diese Spur bündelt mehrere Arbeitsbereiche und zeigt, wo Management oder Berater gezielt nachfassen sollten.",
       customerAction: "Offene Punkte bündeln, Nachweise verknüpfen und Reviewstatus prüfen.",
@@ -10582,34 +10411,59 @@ function renderExecutiveDetailDrawer(item) {
   `;
 }
 
+function executiveWorkspaceDeadlines() {
+  const rows = [
+    ...state.tasks.filter(taskEngine.isOpen).map((item) => ({ ...item, date: item.due, route: "tasks", area: item.module || "Aufgaben" })),
+    ...state.policies.map((item) => ({ ...item, date: item.review, route: "policies", area: "Policy Review" })),
+    ...state.suppliers.map((item) => ({ ...item, title: item.name, date: item.nextReview, route: "suppliers", area: "Lieferantenreview" })),
+    ...state.contracts.map((item) => ({ ...item, title: item.title || item.name, date: item.review || item.due, route: "contracts", area: "Verträge" }))
+  ];
+  return rows.filter((item) => reviewSafeDate(item.date)).map((item) => {
+    const days = reviewDaysUntil(item.date);
+    return { ...item, days, due: formatDateOnly(item.date), status: days < 0 ? "Überfällig" : days === 0 ? "Heute fällig" : `In ${days} Tagen` };
+  }).sort((left, right) => left.date.localeCompare(right.date));
+}
+
 function renderExecutiveCockpit() {
   const stats = dashboardStats();
   const riskData = riskComplianceDashboardData(stats);
-  const demoRisks = executiveDemoRisks();
-  const decisions = executiveDecisionItems();
-  const tracks = executiveComplianceTracks();
-  const deadlines = executiveDeadlineLanes();
-  const highCount = demoRisks.filter((risk) => ["High", "Critical"].includes(risk.severity)).length + riskData.highRisks.length;
-  const criticalWithoutTreatment = riskData.highRisks.filter((risk) => !risk.treatment).length || 2;
-  const overdueCount = [
-    ...state.tasks.filter((task) => task.status !== "Erledigt" && task.due && task.due < today()),
-    ...demoRisks.filter((risk) => risk.status === "Überfällig")
-  ].length;
-  const overdueActions = demoRisks.slice(0, 4).map((risk, index) => ({
-    title: risk.title,
-    meta: `${risk.area} · Maßnahme: ${risk.action}`,
-    overdue: [7, 5, 2, 1][index] || 1,
-    route: risk.route
+  const risks = riskData.highRisks.map((risk) => ({
+    title: risk.scenario || risk.asset || risk.riskId || "Risiko",
+    area: risk.area || risk.asset || "Risikoregister",
+    severity: riskLevel(riskScore(risk.likelihood, risk.impact)),
+    owner: risk.owner || "Nicht zugeordnet",
+    action: risk.treatment || "Behandlung ergänzen",
+    due: reviewSafeDate(risk.review || risk.due) ? formatDateOnly(risk.review || risk.due) : "Nicht geplant",
+    status: risk.status || "Offen",
+    route: "risks"
   }));
-  const flatDeadlines = deadlines.flatMap((lane) => lane.items.map((item) => ({ ...item, lane: lane.label }))).slice(0, 4);
-  const trackProgress = [64, 58, 71, 53, 62];
-  const detailItems = executiveDetailItems({ demoRisks, decisions, overdueActions, flatDeadlines, tracks });
+  const decisions = riskData.management.decisions.map((item) => ({
+    ...item, why: item.meta, owner: "Im Fachregister", status: "Offen", next: item.type, route: item.view
+  }));
+  const tracks = riskData.complianceTracks.map((track) => ({
+    ...track, title: track.label, items: [track.hint, track.value], status: "Formaler Stand", route: track.view
+  }));
+  const deadlines = executiveWorkspaceDeadlines();
+  const highCount = riskData.highRisks.length;
+  const criticalWithoutTreatment = riskData.highRisks.filter((risk) => !String(risk.treatment || "").trim()).length;
+  const overdueCount = riskData.overdueTasks.length;
+  const overdueActions = riskData.overdueTasks.map((task) => ({
+    title: task.title,
+    meta: `${task.module || "Aufgaben"} · Owner: ${task.owner || "Nicht zugeordnet"}`,
+    overdue: Math.abs(reviewDaysUntil(task.due)),
+    owner: task.owner,
+    due: formatDateOnly(task.due),
+    route: "tasks"
+  }));
+  const flatDeadlines = deadlines.slice(0, 4);
+  const nextDeadline = deadlines.find((item) => item.days >= 0);
+  const detailItems = executiveDetailItems({ risks, decisions, overdueActions, flatDeadlines, tracks });
   const selectedDetail = detailItems.find((item) => item.id === selectedExecutiveDetailId);
   const kpis = [
     {
       title: "Gesamtstatus",
-      value: "In Bewertung",
-      text: "Managementlagebild vorbereitet, fachliche Freigaben offen",
+      value: riskData.packageApproved ? "Beraterfreigegeben" : "Prüfung offen",
+      text: "Fachliche Freigabe durch Berater/Admin",
       tone: "active",
       icon: "target",
       action: "status-review"
@@ -10617,23 +10471,23 @@ function renderExecutiveCockpit() {
     {
       title: "Top-Risiken",
       value: `${highCount} High/Critical`,
-      text: `${criticalWithoutTreatment} ohne geprüfte Maßnahme`,
+      text: `${criticalWithoutTreatment} ohne dokumentierte Behandlung`,
       tone: highCount ? "warning" : "done",
       icon: "trend",
       action: "risks-high"
     },
     {
-      title: "Offene Entscheidungen",
-      value: `${decisions.length} offen`,
-      text: "Risikoakzeptanz / Priorisierung erforderlich",
+      title: "Entscheidungsbedarf",
+      value: `${decisions.length} Hinweise`,
+      text: "Aus Risiken, Policies und Aufgaben",
       tone: decisions.length ? "warning" : "done",
       icon: "decision",
       action: "decisions-open"
     },
     {
       title: "Nächste Frist",
-      value: "7 Tage",
-      text: `${overdueCount || 3} Punkt(e) fällig oder zu priorisieren`,
+      value: nextDeadline ? (nextDeadline.days === 0 ? "Heute" : `${nextDeadline.days} Tage`) : "Nicht geplant",
+      text: `${deadlines.filter((item) => item.days < 0).length} Termine überfällig`,
       tone: overdueCount ? "critical" : "active",
       icon: "calendar",
       action: "deadlines"
@@ -10644,12 +10498,13 @@ function renderExecutiveCockpit() {
     <section class="executive-page">
       <div class="executive-mission-head">
         <div>
-          <span class="executive-concept-pill">Konzept: Variante 2 - Mission Control</span>
-          <h3>Management Cockpit | NHD / Daume Gruppe</h3>
+          <span class="executive-concept-pill">${backendSessionUser ? "Managementübersicht" : "Demo / lokaler Arbeitsstand"}</span>
+          <h3>Management Cockpit</h3>
+          ${backendSessionUser?.tenant?.name ? `<span class="executive-tenant">${escapeHtml(backendSessionUser.tenant.name)}</span>` : ""}
           <p>Leitstand für Risiken, Maßnahmen, Entscheidungen und Fristen.</p>
         </div>
         <div class="executive-mission-actions">
-          <span class="executive-data-state"><i></i><span data-live-berlin-time>Datenstand: ${escapeHtml(formatBerlinDataState())} Uhr</span></span>
+          <span class="executive-data-state"><span data-live-berlin-time>Berlin: ${escapeHtml(formatBerlinDataState())} Uhr</span></span>
           <button class="quiet-button" type="button" data-jump="dashboard">Hilfe</button>
           <button class="quiet-button" type="button" data-management-dashboard-report>Export</button>
           <button class="quiet-button" type="button" data-executive-action="filter-risks">Filter</button>
@@ -10660,13 +10515,13 @@ function renderExecutiveCockpit() {
         ${kpis.map((kpi, index) => `
           <button class="executive-page-kpi executive-kpi-${escapeHtml(kpi.icon)} ${escapeHtml(kpi.tone)}" type="button" data-executive-action="${escapeHtml(kpi.action)}">
             <div class="executive-kpi-visual" aria-hidden="true">
-              <span>${index === 0 ? "◎" : index === 1 ? "⌁" : index === 2 ? "5" : "□"}</span>
+              <span>${index === 0 ? "◎" : index === 1 ? "⌁" : index === 2 ? decisions.length : "□"}</span>
             </div>
             <div class="executive-kpi-copy">
               <span>${escapeHtml(kpi.title)}</span>
               <strong>${escapeHtml(kpi.value)}</strong>
               <small>${escapeHtml(kpi.text)}</small>
-              ${index === 0 ? `<em>Trends (30 Tage) · Stabil</em>` : index === 1 ? `<em>Risiken ansehen</em>` : index === 2 ? `<div class="executive-kpi-progress"><i style="width: 42%"></i></div>` : `<em>Fristen ansehen</em>`}
+              <em>${index === 0 ? "Prüfstatus ansehen" : index === 1 ? "Risiken ansehen" : index === 2 ? "Managementbewertung öffnen" : "Fristen ansehen"}</em>
             </div>
           </button>
         `).join("")}
@@ -10682,7 +10537,8 @@ function renderExecutiveCockpit() {
             <button class="executive-link-button" type="button" data-executive-action="risks-high">Alle anzeigen</button>
           </div>
           <div class="executive-risk-list">
-            ${demoRisks.slice(0, 4).map((risk, index) => `
+            ${risks.length ? "" : `<p class="executive-empty">Keine offenen hohen oder kritischen Risiken erfasst.</p>`}
+            ${risks.slice(0, 4).map((risk, index) => `
               <button class="executive-risk-item ${escapeHtml(executiveSeverityTone(risk.severity || risk.status))}" type="button" data-executive-detail="risk-${index}">
                 <div>
                   <span>${escapeHtml(risk.area)} · Frist: ${escapeHtml(risk.due)} · Owner: ${escapeHtml(risk.owner)}</span>
@@ -10706,7 +10562,8 @@ function renderExecutiveCockpit() {
             <button class="executive-link-button" type="button" data-executive-action="overdue-actions">Alle anzeigen</button>
           </div>
           <div class="executive-action-list">
-            ${overdueActions.map((item, index) => `
+            ${overdueActions.length ? "" : `<p class="executive-empty">Keine überfälligen Aufgaben erfasst.</p>`}
+            ${overdueActions.slice(0, 4).map((item, index) => `
               <button class="executive-action-item" type="button" data-executive-detail="action-${index}">
                 <div>
                   <strong>${escapeHtml(item.title)}</strong>
@@ -10728,11 +10585,12 @@ function renderExecutiveCockpit() {
             <button class="executive-link-button" type="button" data-executive-action="decisions-open">Alle anzeigen</button>
           </div>
           <div class="executive-decision-list">
+            ${decisions.length ? "" : `<p class="executive-empty">Keine offenen Entscheidungshinweise.</p>`}
             ${decisions.slice(0, 3).map((item, index) => `
               <button class="executive-decision-item" type="button" data-executive-detail="decision-${index}">
                 <div>
                   <strong>${escapeHtml(item.title)}</strong>
-                  <small>${escapeHtml(item.owner)} · Entscheidung ausstehend</small>
+                  <small>${escapeHtml(item.why)}</small>
                 </div>
                 <div>
                   ${statusTag(item.status)}
@@ -10752,14 +10610,15 @@ function renderExecutiveCockpit() {
             <button class="executive-link-button" type="button" data-executive-action="deadlines">Alle anzeigen</button>
           </div>
           <div class="executive-timeline">
+            ${flatDeadlines.length ? "" : `<p class="executive-empty">Noch keine Fristen geplant.</p>`}
             ${flatDeadlines.map((item, index) => `
               <button class="executive-timeline-item" type="button" data-executive-detail="deadline-${index}">
-                <span class="executive-timeline-date"><b>${escapeHtml(index === 0 ? "14" : index === 1 ? "21" : index === 2 ? "28" : "04")}</b><small>${escapeHtml(index < 3 ? "Mai" : "Jun")}</small></span>
+                <span class="executive-timeline-date"><b>${escapeHtml(item.date.slice(8, 10))}</b><small>${escapeHtml(new Intl.DateTimeFormat("de-DE", { month: "short", timeZone: "Europe/Berlin" }).format(new Date(`${item.date}T12:00:00Z`)))}</small></span>
                 <span>
                   <strong>${escapeHtml(item.title)}</strong>
                   <small>${escapeHtml(item.area)} · ${escapeHtml(item.owner)}</small>
                 </span>
-                ${statusTag(index === 0 ? "Überfällig" : index === 1 ? "In 7 Tagen" : index === 2 ? "In 14 Tagen" : "In 21 Tagen")}
+                ${statusTag(item.status)}
               </button>
             `).join("")}
             <button class="executive-panel-footer" type="button" data-executive-action="deadlines">Alle Fristen anzeigen</button>
@@ -10783,10 +10642,10 @@ function renderExecutiveCockpit() {
                 ${statusTag(track.status)}
               </div>
               <div class="executive-track-footer">
-                <small>Offene Punkte</small>
-                <b>${escapeHtml(track.open + track.hot + 5)}</b>
+                <small>${escapeHtml(track.hint)}</small>
+                <b>${escapeHtml(track.value)}</b>
                 <span>Fortschritt</span>
-                <div class="executive-track-ring" style="--value: ${trackProgress[index] || 50}"><em>${trackProgress[index] || 50}%</em></div>
+                <div class="executive-track-ring" style="--value: ${track.percent}"><em>${track.percent}%</em></div>
               </div>
               <span class="executive-panel-footer">Details anzeigen</span>
             </button>
@@ -10798,21 +10657,21 @@ function renderExecutiveCockpit() {
         <div class="executive-readiness-main">
           <span class="executive-readiness-icon">⌘</span>
           <div>
-            <span>Management Readiness</span>
-            <strong>68%</strong>
-            <small>Readiness Score</small>
+            <span>Formale Vorbereitung</span>
+            <strong>${riskData.formalScore}%</strong>
+            <small>Keine Konformitätsaussage</small>
           </div>
-          <div class="executive-readiness-progress"><i style="width: 68%"></i></div>
+          <div class="executive-readiness-progress"><i style="width: ${riskData.formalScore}%"></i></div>
         </div>
         <div class="executive-readiness-trend">
           <span>Trend (30 Tage)</span>
-          <strong>+6%</strong>
-          <small>Weiterhin positiv</small>
+          <strong>Nicht verfügbar</strong>
+          <small>Keine vergleichbaren Verlaufsdaten</small>
         </div>
         <div class="executive-readiness-blocker">
           <span class="executive-readiness-flag">!</span>
           <div>
-            <strong>2 Punkte blockieren Freigaben</strong>
+            <strong>${riskData.gate.blockers.length} Punkte im Auditpaket-Gate offen</strong>
             <small>Priorisierung durch Management erforderlich</small>
             <button class="executive-panel-footer" type="button" data-executive-action="audit-blockers">Details prüfen</button>
           </div>
@@ -19657,15 +19516,16 @@ function reviewItemDueDate(item, record = {}) {
 function reviewSafeDate(value) {
   const text = String(value || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return "";
-  const date = new Date(`${text}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? "" : text;
+  const date = new Date(`${text}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text ? "" : text;
 }
 
 function reviewDatePlusDays(value, days) {
   const base = reviewSafeDate(value);
   if (!base) return "";
-  const date = new Date(`${base}T00:00:00`);
-  date.setDate(date.getDate() + days);
+  // A date-only deadline is a calendar date, not local midnight converted to UTC.
+  const date = new Date(`${base}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
@@ -21490,7 +21350,49 @@ function auditPackageTemplateDraftOpenItems() {
 }
 
 function canApproveAuditPackage() {
+  if (backendSessionUser) {
+    return ["admin", "consultant"].includes(String(backendSessionUser.role || "").toLowerCase());
+  }
   return canReviewDocuments() || isBackendAdmin();
+}
+
+function backendAuditPackageApproval(approval) {
+  if (!approval || typeof approval !== "object") return null;
+  return {
+    ...approval,
+    date: approval.date || String(approval.approvedAt || "").slice(0, 10),
+    dateTime: approval.dateTime || approval.approvedAt || "",
+    by: approval.by || approval.approvedBy || "SFM Compliance",
+    role: approval.role || approval.approvedByRole || "",
+    version: approval.version || String(approval.workspaceRevision || "1")
+  };
+}
+
+async function loadBackendAuditPackageStatus(options = {}) {
+  if (!backendIsAuthenticated()) {
+    backendAuditPackageStatus = { loaded: false, loading: false, error: "", data: null };
+    return null;
+  }
+  if (backendAuditPackageStatus.loading) return backendAuditPackageStatus.data;
+  backendAuditPackageStatus = { ...backendAuditPackageStatus, loading: true, error: "" };
+  try {
+    const payload = await apiRequest("/api/audit-package/status", { cache: "no-store" });
+    backendAuditPackageStatus = {
+      loaded: true,
+      loading: false,
+      error: "",
+      data: payload.auditPackage || null
+    };
+  } catch (error) {
+    backendAuditPackageStatus = {
+      loaded: true,
+      loading: false,
+      error: error.message || "Auditpaket-Status konnte nicht geladen werden.",
+      data: null
+    };
+  }
+  if (options.render && currentView === "auditpackage") render();
+  return backendAuditPackageStatus.data;
 }
 
 function auditPackageFingerprint(payload = {}) {
@@ -21590,7 +21492,21 @@ function auditPackageReportData() {
   const stats = dashboardStats();
   const reviewItems = reviewCenterItems();
   const reviewMetrics = reviewCenterMetrics(reviewItems);
-  const gate = auditPackageGate(reviewItems);
+  const localGate = auditPackageGate(reviewItems);
+  const serverPackage = backendAuditPackageStatus.loaded ? backendAuditPackageStatus.data : null;
+  const serverBlockers = Array.isArray(serverPackage?.blockers)
+    ? serverPackage.blockers.map((item) => typeof item === "string"
+      ? item
+      : [item?.title, item?.message].filter(Boolean).join(": "))
+    : null;
+  const gate = serverPackage
+    ? {
+        ...localGate,
+        consultantApproved: Boolean(serverPackage.formalGateClear),
+        blockers: serverBlockers || [],
+        serverValidated: true
+      }
+    : localGate;
   const documents = state.documents.filter((document) => document.status !== "Quelle");
   const docMetrics = documentWorkflowMetrics(documents);
   const traceRows = auditTraceabilityRows(documents);
@@ -21619,10 +21535,16 @@ function auditPackageReportData() {
     soa,
     risks
   };
-  const packageFingerprint = auditPackageFingerprint(auditPackageFingerprintPayload(baseData));
-  const packageApproval = currentAuditPackageApproval(packageFingerprint);
-  const latestPackageApproval = latestAuditPackageApproval();
-  const approvalStale = Boolean(latestPackageApproval && !packageApproval);
+  const packageFingerprint = serverPackage?.fingerprint || auditPackageFingerprint(auditPackageFingerprintPayload(baseData));
+  const packageApproval = serverPackage
+    ? (serverPackage.advisorApproved ? backendAuditPackageApproval(serverPackage.approval) : null)
+    : currentAuditPackageApproval(packageFingerprint);
+  const latestPackageApproval = serverPackage
+    ? backendAuditPackageApproval(serverPackage.latestApproval)
+    : latestAuditPackageApproval();
+  const approvalStale = serverPackage
+    ? Boolean(serverPackage.approvalStale)
+    : Boolean(latestPackageApproval && !packageApproval);
   const packageStatus = packageApproval
     ? "beraterfreigegeben und exportbereit"
     : gate.consultantApproved
@@ -22067,7 +21989,7 @@ function renderAuditPackageApprovalBox(data = auditPackageReportData()) {
   `;
 }
 
-function approveAuditPackage(button) {
+async function approveAuditPackage(button) {
   if (!canApproveAuditPackage()) {
     showPermissionToast("Auditpaket freigeben", "Berater-, Reviewer- oder Admin-Rechten");
     return;
@@ -22080,6 +22002,48 @@ function approveAuditPackage(button) {
   const panel = button?.closest("[data-audit-package-panel]");
   const comment = String(panel?.querySelector("[data-audit-package-comment]")?.value || "").trim()
     || "Auditpaket durch Berater/Admin für den aktuellen Paketstand freigegeben.";
+  if (backendIsAuthenticated()) {
+    const originalLabel = button?.textContent || "Auditpaket freigeben";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Freigabe wird gespeichert ...";
+    }
+    try {
+      const payload = await apiRequest("/api/audit-package/approve", {
+        method: "POST",
+        json: {
+          expectedRevision: backendSync.revision,
+          fingerprint: data.packageFingerprint,
+          comment
+        }
+      });
+      backendAuditPackageStatus = {
+        loaded: true,
+        loading: false,
+        error: "",
+        data: payload.auditPackage || null
+      };
+      await loadBackendWorkspaceState();
+      showToast("Auditpaket wurde serverseitig freigegeben und im Audit Trail protokolliert.");
+      render();
+    } catch (error) {
+      if (error.payload?.auditPackage) {
+        backendAuditPackageStatus = {
+          loaded: true,
+          loading: false,
+          error: error.message || "Freigabe nicht möglich.",
+          data: error.payload.auditPackage
+        };
+      }
+      showToast(`Auditpaket konnte nicht freigegeben werden: ${error.message}`, "warning");
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+      render();
+    }
+    return;
+  }
   const approval = {
     id: crypto.randomUUID(),
     date: today(),
@@ -31740,30 +31704,30 @@ function renderSoaTableRow(row) {
         <small>${escapeHtml(control.en)}</small>
       </td>
       <td>
-        <select class="soa-select" data-soa-control="${escapeHtml(control.id)}" data-soa-field="applicability" ${disabled}>
+        <select class="soa-select" aria-label="${escapeHtml(control.id)} Anwendbarkeit" data-soa-control="${escapeHtml(control.id)}" data-soa-field="applicability" ${disabled}>
           ${SOA_APPLICABILITY_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${record.applicability === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
         </select>
       </td>
       <td>
-        <select class="soa-select" data-soa-control="${escapeHtml(control.id)}" data-soa-field="implementation" ${disabled}>
+        <select class="soa-select" aria-label="${escapeHtml(control.id)} Umsetzungsstatus" data-soa-control="${escapeHtml(control.id)}" data-soa-field="implementation" ${disabled}>
           ${SOA_IMPLEMENTATION_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${record.implementation === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
         </select>
       </td>
       <td>
-        <input class="soa-input" data-soa-control="${escapeHtml(control.id)}" data-soa-field="owner" value="${escapeHtml(record.owner)}" placeholder="Owner" ${disabled} />
+        <input class="soa-input" aria-label="${escapeHtml(control.id)} Owner" data-soa-control="${escapeHtml(control.id)}" data-soa-field="owner" value="${escapeHtml(record.owner)}" placeholder="Owner" ${disabled} />
       </td>
       <td>
-        <textarea class="soa-textarea" data-soa-control="${escapeHtml(control.id)}" data-soa-field="justification" placeholder="Warum ist das Control anwendbar/nicht anwendbar? Wie wird es umgesetzt?" ${disabled}>${escapeHtml(record.justification)}</textarea>
+        <textarea class="soa-textarea" aria-label="${escapeHtml(control.id)} Begründung und Umsetzung" data-soa-control="${escapeHtml(control.id)}" data-soa-field="justification" placeholder="Warum ist das Control anwendbar/nicht anwendbar? Wie wird es umgesetzt?" ${disabled}>${escapeHtml(record.justification)}</textarea>
       </td>
       <td>
-        <textarea class="soa-textarea compact" data-soa-control="${escapeHtml(control.id)}" data-soa-field="evidence" placeholder="Nachweis, Policy, Link oder Dokumentname" ${disabled}>${escapeHtml(record.evidence)}</textarea>
+        <textarea class="soa-textarea compact" aria-label="${escapeHtml(control.id)} Nachweis" data-soa-control="${escapeHtml(control.id)}" data-soa-field="evidence" placeholder="Nachweis, Policy, Link oder Dokumentname" ${disabled}>${escapeHtml(record.evidence)}</textarea>
         <div class="soa-row-actions">
           ${linkedDocuments.length ? `<button class="quiet-button" type="button" data-open-document="${escapeHtml(linkedDocuments[0].id)}">${linkedDocuments.length} Nachweis${linkedDocuments.length === 1 ? "" : "e"}</button>` : `<button class="quiet-button" type="button" data-soa-evidence="${escapeHtml(control.id)}">Nachweis hochladen</button>`}
         </div>
       </td>
       <td>
-        <input class="soa-input" data-soa-control="${escapeHtml(control.id)}" data-soa-field="risk" value="${escapeHtml(record.risk)}" placeholder="Risiko / Behandlung" ${disabled} />
-        <input class="soa-input" type="date" data-soa-control="${escapeHtml(control.id)}" data-soa-field="review" value="${escapeHtml(record.review)}" ${disabled} />
+        <input class="soa-input" aria-label="${escapeHtml(control.id)} Risiko und Behandlung" data-soa-control="${escapeHtml(control.id)}" data-soa-field="risk" value="${escapeHtml(record.risk)}" placeholder="Risiko / Behandlung" ${disabled} />
+        <input class="soa-input" type="date" aria-label="${escapeHtml(control.id)} Reviewdatum" data-soa-control="${escapeHtml(control.id)}" data-soa-field="review" value="${escapeHtml(record.review)}" ${disabled} />
       </td>
       <td>
         <div class="document-actions evidence-matrix-actions">
@@ -33947,12 +33911,35 @@ function moduleGuideData(moduleId) {
   return guides[moduleId];
 }
 
+function intuneContext(expanded = false) {
+  const tenant = backendSessionUser?.tenant;
+  const requestScope = `${backendSessionUser?.id || "local"}:${tenant?.id || "local"}`;
+  return {
+    scope: requestScope,
+    isCurrent: () => requestScope === `${backendSessionUser?.id || "local"}:${backendSessionUser?.tenant?.id || "local"}`,
+    tenantName: tenant?.name || "Lokale Testansicht",
+    authenticated: !!backendSessionUser && location.protocol !== "file:",
+    expanded, escape: escapeHtml, icon: renderModuleInlineIcon,
+    request: apiRequest,
+    canReload: () => !backendSync.dirty && !backendSync.saving && !backendSync.conflict,
+    reload: async () => {
+      if (backendSync.dirty || backendSync.saving || backendSync.conflict) {
+        showToast("Intune-Daten gespeichert. Lokale Änderungen bitte vor dem Neuladen abgleichen.");
+        return;
+      }
+      await loadBackendWorkspaceState();
+      render();
+    }
+  };
+}
+
 function renderAssets() {
   const rows = state.assets;
 
   return `
     <div class="asset-command-page">
       <div class="asset-command-main">
+        ${window.SFMIntune.render(intuneContext())}
         ${renderAssetManagementHero(rows)}
         ${renderAssetManagementWorkflow(rows)}
         ${renderReferenceRegisterPanel("Asset Register", "assets", rows, "Assets, Owner, Kritikalität, Nachweise und Reviews auf einer Arbeitsfläche.")}
@@ -38900,6 +38887,7 @@ function renderIntegrations() {
   const categories = [...new Set(rows.map((item) => item.category))];
 
   return `
+    ${window.SFMIntune.render(intuneContext(true))}
     ${renderModuleGuide("integrations")}
     ${renderIntegrationCockpit(rows)}
     ${renderIntegrationRoadmapHub(rows)}
@@ -41104,7 +41092,7 @@ function renderRegisterDetailDrawer(collection, rows = registerRows(collection))
         ` : `<p>${escapeHtml(row.evidence || "Noch kein Nachweis verknüpft. Datei, Link oder Dokumentverweis ergänzen.")}</p>`}
       </section>
 
-      ${collection === "assets" ? renderAssetDetailEditForm(row) : ""}
+      ${collection === "assets" ? window.SFMIntune.sourceDetails(row, escapeHtml) + renderAssetDetailEditForm(row) : ""}
       ${collection === "risks" ? renderRiskDetailEditForm(row) : ""}
       ${collection === "suppliers" ? renderSupplierDetailEditForm(row) : ""}
       ${collection === "legal" ? renderLegalDetailEditForm(row) : ""}
@@ -41349,7 +41337,7 @@ function renderReferenceAssetRow(row = {}, editable = false) {
   const summary = registerRowSummary("assets", row);
   return `
     <tr class="${registerRowStateClass("assets", row)}" data-register-detail="assets:${escapeHtml(row.id || "")}">
-      <td>${referencePrimaryCell("asset", summary.title, summary.subtitle)}</td>
+      <td>${referencePrimaryCell("asset", summary.title, summary.subtitle)}${row.intune?.device ? `<span class="intune-source-badge">Intune${row.intune.missingSince ? " · nicht mehr gemeldet" : ""}</span>` : ""}</td>
       <td>${escapeHtml(row.type || "Asset")}</td>
       <td>${referenceOwnerCell(row.owner || "Owner offen", summary.ownerContext)}</td>
       <td>${statusTag(row.criticality || "Offen")}</td>
@@ -42198,15 +42186,17 @@ function fieldHelp(copy) {
 }
 
 function field(label, name, type, placeholder, help = "") {
-  return `<div class="field"><label>${label}</label>${fieldHelp(help)}<input name="${name}" type="${type}" placeholder="${escapeHtml(placeholder)}" /></div>`;
+  const inputId = `field-${crypto.randomUUID()}`;
+  return `<div class="field"><label for="${inputId}">${label}</label>${fieldHelp(help)}<input id="${inputId}" name="${name}" type="${type}" placeholder="${escapeHtml(placeholder)}" /></div>`;
 }
 
 function selectField(label, name, options, help = "") {
+  const inputId = `field-${crypto.randomUUID()}`;
   return `
     <div class="field">
-      <label>${label}</label>
+      <label for="${inputId}">${label}</label>
       ${fieldHelp(help)}
-      <select name="${name}">
+      <select id="${inputId}" name="${name}">
         ${options.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option || "Noch offen")}</option>`).join("")}
       </select>
     </div>
@@ -42230,24 +42220,25 @@ function renderRegisterScopeLegend() {
 }
 
 function templateField(field, initialData = {}) {
+  const inputId = `template-field-${crypto.randomUUID()}`;
   const required = field.required ? "required" : "";
   const value = String(initialData[field.name] || "");
   const guidance = templateFieldGuidanceBlock(field);
   if (field.type === "textarea") {
     return `
       <div class="field full">
-        <label>${escapeHtml(field.label)}${field.required ? " *" : ""}</label>
+        <label for="${inputId}">${escapeHtml(field.label)}${field.required ? " *" : ""}</label>
         ${guidance}
-        <textarea name="${escapeHtml(field.name)}" placeholder="${escapeHtml(field.placeholder || "")}" ${required}>${escapeHtml(value)}</textarea>
+        <textarea id="${inputId}" name="${escapeHtml(field.name)}" placeholder="${escapeHtml(field.placeholder || "")}" ${required}>${escapeHtml(value)}</textarea>
       </div>
     `;
   }
   if (field.type === "select") {
     return `
       <div class="field">
-        <label>${escapeHtml(field.label)}${field.required ? " *" : ""}</label>
+        <label for="${inputId}">${escapeHtml(field.label)}${field.required ? " *" : ""}</label>
         ${guidance}
-        <select name="${escapeHtml(field.name)}" ${required}>
+        <select id="${inputId}" name="${escapeHtml(field.name)}" ${required}>
           ${(field.options || []).map((option) => `<option value="${escapeHtml(option)}" ${option === value ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
         </select>
       </div>
@@ -42255,9 +42246,9 @@ function templateField(field, initialData = {}) {
   }
   return `
     <div class="field">
-      <label>${escapeHtml(field.label)}${field.required ? " *" : ""}</label>
+      <label for="${inputId}">${escapeHtml(field.label)}${field.required ? " *" : ""}</label>
       ${guidance}
-      <input name="${escapeHtml(field.name)}" type="${escapeHtml(field.type || "text")}" placeholder="${escapeHtml(field.placeholder || "")}" value="${escapeHtml(value)}" ${required} />
+      <input id="${inputId}" name="${escapeHtml(field.name)}" type="${escapeHtml(field.type || "text")}" placeholder="${escapeHtml(field.placeholder || "")}" value="${escapeHtml(value)}" ${required} />
     </div>
   `;
 }
@@ -42658,6 +42649,7 @@ function focusFirstMissingTemplateField() {
 }
 
 function bindViewEvents() {
+  window.SFMIntune.mount(appView.querySelector(".intune-widget"), intuneContext(currentView === "integrations"));
   appView.querySelectorAll("[data-jump]").forEach((button) => {
     button.addEventListener("click", () => {
       navigateToView(button.dataset.jump);
@@ -48429,7 +48421,41 @@ function downloadAuditPreparationReport() {
   showToast("Audit-Paket exportiert.");
 }
 
-function downloadAuditEvidenceBundleReport() {
+async function downloadServerAuditPackage() {
+  const response = await fetch("/api/audit-package/export", {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.message || payload.error || `HTTP ${response.status}`);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const filenameMatch = disposition.match(/filename="([^"]+)"/i);
+  const filename = filenameMatch?.[1] || `sfm-compliance-auditpaket-${today()}.zip`;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadAuditEvidenceBundleReport() {
+  if (backendIsAuthenticated()) {
+    try {
+      await downloadServerAuditPackage();
+      showToast("Freigegebenes Auditpaket wurde sicher aus dem Backend exportiert.");
+    } catch (error) {
+      showToast(`Auditpaket-Export nicht möglich: ${error.message}`, "warning");
+      await loadBackendAuditPackageStatus({ render: true });
+    }
+    return;
+  }
   const visibleDocuments = state.documents.filter((document) => document.status !== "Quelle");
   const bundle = auditEvidenceBundleData(visibleDocuments);
   const lines = [
@@ -49081,6 +49107,7 @@ async function handleBackendLogout() {
   accountMfaSetup = { secret: "", otpauthUri: "" };
   accountSessionData = { loaded: false, loading: false, error: "", sessions: [] };
   backendNotificationData = { loaded: false, loading: false, error: "", states: [], summary: {} };
+  backendAuditPackageStatus = { loaded: false, loading: false, error: "", data: null };
   notificationDeliveryData = { loaded: false, loading: false, error: "", config: { enabled: false, configured: false, channels: {}, runtime: {} }, deliveries: [], summary: {} };
   backendSync = {
     loaded: false,
@@ -50963,14 +50990,15 @@ function handleExecutiveAction(action = "") {
       return;
     case "decisions-open":
       showToast("Fokus: offene Managemententscheidungen.");
-      navigateToView("tasks");
+      navigateToView("managementreview");
       return;
     case "deadlines":
       showToast("Fokus: Fristen und fällige Aufgaben.");
       navigateToView("tasks");
       return;
     case "overdue-actions":
-      openReview({ due: "Überfällig" }, "Fokus: überfällige Prüfpunkte und Maßnahmen.");
+      showToast("Offene und überfällige Aufgaben.");
+      navigateToView("tasks");
       return;
     case "audit-blockers":
       openReview({ blockers: true }, "Fokus: Audit-Blocker.");

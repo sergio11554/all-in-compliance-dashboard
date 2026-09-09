@@ -1,6 +1,6 @@
 # SFM Compliance - Projektübergabe
 
-Stand: 5. August 2026
+Stand: 6. August 2026
 
 ## Projektziel
 
@@ -29,7 +29,7 @@ Das Projekt war vor dieser Übergabe noch nicht als Git-Repository initialisiert
 - Review Center für Einreichungen, Beraterprüfung, Nacharbeit, Ablehnung und Freigabe
 - Trennung zwischen internem Beraterkommentar und Kundenkommentar
 - Automatische Kundenaufgaben bei angeforderter Nacharbeit
-- Auditpaket-Gate mit Blockern und expliziter Beraterfreigabe
+- Serverseitiges Auditpaket-Gate mit Blockern, revisionsgebundener Beraterfreigabe und geschuetztem ZIP-Export
 - Dokumentation, Nachweise, Versionierung und Audit Trail
 - Task Management für Verantwortlichkeiten, Fristen und Ergebnisse
 
@@ -123,16 +123,16 @@ Folgende lokale Inhalte dürfen nicht in Git gelangen:
 ## Offene Aufgaben
 
 1. Privates GitHub-Repository anlegen, Remote bewusst konfigurieren und den vorbereiteten Commit prüfen.
-2. Ziel-Staging mit PostgreSQL, S3-kompatiblem Speicher, ClamAV und HTTPS aufbauen.
-3. Produktions-Preflight, Restore-Drill und mandantenübergreifende Isolationstests in Staging durchführen.
-4. Rollenbasierte End-to-End-Abnahme für Kunde, Berater, Admin und Auditor dokumentieren.
+2. Den vorbereiteten Staging-Stack in einer dauerhaft erreichbaren Zielumgebung mit HTTPS betreiben.
+3. Produktions-Preflight, Acceptance-Lauf und Restore-Drill dort regelmaessig automatisiert ausfuehren.
+4. Den technisch abgenommenen Kunden-/Berater-/Auditor-Ablauf in der Ziel-Staging-Umgebung regelmaessig ausfuehren.
 5. Accessibility, responsive Darstellung und visuelle Regression auf den wichtigsten Ansichten automatisieren.
 6. Große Frontend- und Backend-Dateien schrittweise nach klaren Domänenmodulen aufteilen.
 7. Datenschutz-, AVV-, Hosting-, Lösch- und Rechtsfreigaben außerhalb des Codes abschließen.
 
 ## Empfohlene nächste Entwicklungsaufgabe
 
-Als nächster zusammenhängender Schritt sollte eine reproduzierbare Staging-Abnahme aufgebaut werden: PostgreSQL, S3, ClamAV und HTTPS starten, anschließend einen vollständigen Mandantenablauf von Einladung über Datenerfassung und Nachweis-Upload bis Beraterprüfung, Auditpaket-Gate, Backup und Restore automatisiert testen. Das reduziert das größte verbleibende Risiko zwischen lokalem Prototyp und belastbarem Kundenbetrieb.
+Die reproduzierbare technische Staging-Abnahme ist jetzt als `./scripts/staging_stack.sh verify` vorhanden und deckt Mandantentrennung, Kunden-Einreichung, Berater-Nacharbeit, erneute Einreichung, Freigabe und Auditor-Lesegrenzen ab. Als naechster zusammenhaengender Schritt sollte sie in einer HTTPS-geschuetzten Ziel-Staging-Umgebung zusammen mit dem serverseitigen Auditpaket-Gate und einem Restore-Drill ausgefuehrt werden. Danach folgen Accessibility-/Responsive-Abnahme und die schrittweise Modularisierung der grossen Frontend- und Backend-Dateien.
 
 ## Übergabeschritte für GitHub
 

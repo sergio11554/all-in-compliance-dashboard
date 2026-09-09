@@ -189,6 +189,29 @@ def _schema(auto_id):
       FOREIGN KEY(tenant_id) REFERENCES tenants(id),
       FOREIGN KEY(owner_user_id) REFERENCES users(id)
     );
+    CREATE TABLE IF NOT EXISTS intune_connections (
+      tenant_id TEXT PRIMARY KEY,
+      config_key TEXT,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      approved_by BIGINT,
+      last_attempt_at BIGINT,
+      last_success_at BIGINT,
+      last_error TEXT,
+      next_run_at BIGINT,
+      preview_id TEXT,
+      preview_nonce TEXT,
+      preview_data TEXT,
+      preview_revision INTEGER,
+      preview_expires BIGINT,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS intune_credentials (
+      tenant_id TEXT PRIMARY KEY,
+      nonce TEXT NOT NULL,
+      ciphertext TEXT NOT NULL,
+      verified_at BIGINT,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+    );
     CREATE TABLE IF NOT EXISTS tenant_events (
       id {auto_id},
       tenant_id TEXT NOT NULL,

@@ -136,6 +136,9 @@ Wichtige Unterlagen:
 - Workspace-Importe, Saves, Snapshots und Restores werden strukturell validiert; Fehler oder Hinweise im Backup-&-Recovery-Center prüfen, bevor ein Stand an Kunden oder Auditvorbereitung übergeben wird
 - System-Backups enthalten Manifest und SHA-256-Pruefsummen fuer Datenbank-Dump und verschluesselte Dateiobjekte
 - Produktiven Restore-Ablauf regelmaessig isoliert pruefen: `./scripts/staging_stack.sh up && ./scripts/restore_drill.sh`
+- Vor Releases den isolierten Staging-Stack mit `./scripts/staging_stack.sh verify` pruefen. Der Lauf kontrolliert PostgreSQL, S3, ClamAV, Einladung, Passwortwechsel, Workspace-Persistenz, Dateiablage, Kunden-Einreichung, Berater-Nacharbeit und -Freigabe, Auditor-Lesegrenzen, Tenant-Export, Audit-Integritaet und Mandantentrennung.
+- Das Auditpaket nur ueber `/api/audit-package/export` ausgeben. Der Export ist erst nach einer aktuellen serverseitigen Freigabe durch Admin oder Berater moeglich; jede relevante Workspace-Aenderung macht eine vorherige Freigabe automatisch veraltet.
+- Die Acceptance-Mandanten bleiben nach `verify` zur manuellen Nachschau erhalten. `./scripts/staging_stack.sh reset` entfernt nur den isolierten Staging-Stack samt Staging-Secrets und Testdaten.
 - Ein erfolgreicher Drill vergleicht State, Datei-Metadaten, Downloads und Audit-Hash-Kette und erzeugt `restore_drill_verified`; das ist eine technische Betriebspruefung, keine fachliche Freigabe
 - Mandantenexporte vor Übergabe oder endgültiger Bereinigung erstellen und geschützt ablegen
 - `ISMS_MFA_ENFORCEMENT=write` aktivieren und MFA fuer Admin-, Berater- und Manager-Konten einrichten. Lesen, Kontoaktionen und MFA-Setup bleiben vor der Aktivierung möglich; Speichern, Freigeben und administrative Aktionen werden serverseitig blockiert.

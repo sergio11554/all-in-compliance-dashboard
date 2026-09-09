@@ -24,6 +24,7 @@
     sans-serif;
 }
 
+
 /* Persisted audit findings */
 .audit-finding-register {
   display: grid;
@@ -56710,9 +56711,11 @@ body[data-view="executive"] {
   --sfm-sidebar-width: 274px !important;
 }
 
+@media (min-width: 1101px) {
 body[data-view="executive"] .sidebar {
   width: 274px !important;
   padding: 26px 18px !important;
+}
 }
 
 body[data-view="executive"] .brand {
@@ -61500,4 +61503,1113 @@ body[data-view] #appView > :where(
   #appView[data-view="contracts"] {
     padding-inline: 16px !important;
   }
+}
+/* Design consistency recheck 2026-08-16.
+   Keep this final layer narrowly scoped: it repairs legacy grid collisions
+   without changing module content or interaction logic. */
+#appView[data-view] :where(section, article, aside, div, form, fieldset) {
+  min-width: 0;
+}
+
+/* Review Center: an older desktop rule turned the header into a 110px rail. */
+#appView[data-view="review"] .review-command {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+#appView[data-view="review"] .review-command > .panel-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px) !important;
+  gap: 24px !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  align-items: start !important;
+}
+
+#appView[data-view="review"] .review-command .review-gate-badge {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  writing-mode: horizontal-tb !important;
+}
+
+#appView[data-view="review"] .review-command .review-header-cards {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  width: 100% !important;
+}
+
+#appView[data-view="review"] .review-item-meta {
+  grid-template-columns: 1fr !important;
+  align-content: start !important;
+}
+
+#appView[data-view="review"] .review-item-meta span {
+  width: 100% !important;
+  overflow-wrap: break-word !important;
+  word-break: normal !important;
+}
+
+/* Project overview: expanded content must not be clipped by compact-panel rules. */
+#appView[data-view="project"] > .module-guide {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  padding: 24px !important;
+  align-items: start !important;
+}
+
+#appView[data-view="project"] .project-chronology,
+#appView[data-view="project"] .project-timeline,
+#appView[data-view="project"] .mission-step,
+#appView[data-view="project"] .mission-card {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+#appView[data-view="project"] .mission-step {
+  align-self: start !important;
+}
+
+#appView[data-view="project"] .mission-controls {
+  grid-template-columns: repeat(4, minmax(160px, 1fr)) !important;
+}
+
+/* SoA summary: KPIs need horizontal space instead of a narrow vertical stack. */
+#appView[data-view="soa"] .soa-hero {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+#appView[data-view="soa"] .soa-hero > .panel-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(520px, 0.72fr) !important;
+  gap: 28px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  align-items: start !important;
+}
+
+#appView[data-view="soa"] .soa-hero .soa-kpis {
+  grid-template-columns: repeat(4, minmax(110px, 1fr)) !important;
+  width: 100% !important;
+  height: auto !important;
+  align-self: start !important;
+}
+
+#appView[data-view="soa"] .soa-hero .soa-kpis > div {
+  min-height: 104px !important;
+  align-content: center !important;
+}
+
+/* Policy groups should keep their natural height rather than stretching to Annex A. */
+#appView[data-view="policies"] .policy-package-sections {
+  align-items: start !important;
+}
+
+#appView[data-view="policies"] .policy-package-section {
+  height: auto !important;
+  align-self: start !important;
+}
+
+/* Legal, incident and contract modules inherited unbounded SVG sizing. */
+#appView[data-view="legal"] .register-command-metric,
+#appView[data-view="incidents"] .register-command-metric,
+#appView[data-view="contracts"] .register-command-metric {
+  min-height: 148px !important;
+  height: auto !important;
+  align-content: start !important;
+  grid-template-rows: auto auto auto auto !important;
+  gap: 8px !important;
+}
+
+#appView[data-view="legal"] .register-command-metric-icon,
+#appView[data-view="incidents"] .register-command-metric-icon,
+#appView[data-view="contracts"] .register-command-metric-icon {
+  display: grid !important;
+  place-items: center !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  border-radius: 12px !important;
+  color: var(--module-accent, #087f8c) !important;
+  background: #eef8fa !important;
+}
+
+#appView[data-view="legal"] .register-command-metric-icon.warning,
+#appView[data-view="incidents"] .register-command-metric-icon.warning,
+#appView[data-view="contracts"] .register-command-metric-icon.warning {
+  color: #b56f17 !important;
+  background: #fff5e7 !important;
+}
+
+#appView[data-view="legal"] .register-command-metric-icon svg,
+#appView[data-view="incidents"] .register-command-metric-icon svg,
+#appView[data-view="contracts"] .register-command-metric-icon svg {
+  display: block !important;
+  width: 22px !important;
+  height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.8 !important;
+}
+
+@media (max-width: 1320px) {
+  #appView[data-view="review"] .review-command > .panel-header,
+  #appView[data-view="soa"] .soa-hero > .panel-header {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="review"] .review-command .review-header-cards,
+  #appView[data-view="soa"] .soa-hero .soa-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #appView[data-view="project"] .mission-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  #appView[data-view="review"] .review-command .review-header-cards,
+  #appView[data-view="soa"] .soa-hero .soa-kpis,
+  #appView[data-view="project"] .mission-controls {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="project"] > .module-guide {
+    padding: 18px !important;
+  }
+}
+
+/* Final collision fixes found during live viewport measurement. */
+#appView[data-view="project"] > .module-guide {
+  content-visibility: visible !important;
+  contain: none !important;
+  contain-intrinsic-size: auto !important;
+  height: max-content !important;
+  min-height: max-content !important;
+}
+
+#appView[data-view="review"] .review-item {
+  grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.1fr) !important;
+  grid-template-areas:
+    "main meta"
+    "state actions" !important;
+  align-items: start !important;
+}
+
+#appView[data-view="review"] .review-item-main {
+  grid-area: main !important;
+}
+
+#appView[data-view="review"] .review-item-meta {
+  grid-area: meta !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+#appView[data-view="review"] .review-item-state {
+  grid-area: state !important;
+}
+
+#appView[data-view="review"] .review-item-actions {
+  grid-area: actions !important;
+  justify-content: flex-end !important;
+}
+
+@media (max-width: 820px) {
+  #appView[data-view="review"] .review-item {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "main"
+      "meta"
+      "state"
+      "actions" !important;
+  }
+
+  #appView[data-view="review"] .review-item-meta {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="review"] .review-item-actions {
+    justify-content: flex-start !important;
+  }
+}
+
+/* Keep secondary register icons inside their intended 20px tool slots. */
+#appView[data-view="legal"] :where(.register-command-flow, .register-command-tools) svg,
+#appView[data-view="incidents"] :where(.register-command-flow, .register-command-tools) svg,
+#appView[data-view="contracts"] :where(.register-command-flow, .register-command-tools) svg,
+#appView[data-view="legal"] :where(.register-panel, .register-table-shell) button svg,
+#appView[data-view="incidents"] :where(.register-panel, .register-table-shell) button svg,
+#appView[data-view="contracts"] :where(.register-panel, .register-table-shell) button svg {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.8 !important;
+}
+
+/* Platform layout integrity pass 2026-08-22.
+   Auto-sized grid children must keep their intrinsic height. The previous
+   layout containment combined with clipped overflow collapsed complete
+   panels to a single grid row on several modules. */
+.workspace-context-bar,
+.module-wide-workspace,
+.register-form-panel,
+.register-panel,
+.table-panel,
+.panel,
+.dashboard-section,
+.review-command,
+.document-workspace,
+.customer-mode-hero,
+.task-command-center {
+  contain: none !important;
+}
+
+#appView[data-view] > :where(
+  .workspace-context-bar,
+  .module-wide-workspace,
+  .register-form-panel,
+  .register-panel,
+  .table-panel,
+  .panel,
+  .dashboard-section,
+  .review-command,
+  .document-workspace,
+  .customer-mode-hero,
+  .task-command-center
+) {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+/* Dashboard detail areas use the available content width without squeezing
+   their headings into the space left by a large action toolbar. */
+@media (max-width: 1500px) {
+  #appView[data-view="dashboard"] .command-center > .panel-header {
+    grid-template-columns: 1fr !important;
+    align-items: start !important;
+  }
+
+  #appView[data-view="dashboard"] .command-center .action-row {
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+  }
+
+  #appView[data-view="dashboard"] .customer-cockpit,
+  #appView[data-view="dashboard"] .dashboard-program-grid,
+  #appView[data-view="dashboard"] .dashboard-curated-grid,
+  #appView[data-view="dashboard"] .dashboard-tool-grid,
+  #appView[data-view="dashboard"] .dashboard-overview-grid,
+  #appView[data-view="dashboard"] .dashboard-start-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #appView[data-view="review"] .review-item {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "main"
+      "meta"
+      "state"
+      "actions" !important;
+  }
+
+  #appView[data-view="review"] .review-item-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #appView[data-view="review"] .review-item-actions {
+    justify-content: flex-start !important;
+  }
+
+  :is(
+    #appView[data-view="assets"],
+    #appView[data-view="risks"],
+    #appView[data-view="suppliers"],
+    #appView[data-view="legal"],
+    #appView[data-view="incidents"],
+    #appView[data-view="contracts"]
+  ) :is(.register-command-grid, .register-command-flow) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :is(
+    #appView[data-view="legal"],
+    #appView[data-view="incidents"],
+    #appView[data-view="contracts"]
+  ) :is(.register-simple-form, .form-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :is(
+    #appView[data-view="legal"],
+    #appView[data-view="incidents"],
+    #appView[data-view="contracts"]
+  ) :is(.register-simple-form, .form-grid) .field.wide {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+/* The management cockpit keeps the mockup hierarchy while allowing copy to
+   determine row height. Fixed 52/68px rows clipped German labels and metadata. */
+#appView[data-view="executive"] .executive-mission-panel,
+#appView[data-view="executive"] .executive-page-kpi,
+#appView[data-view="executive"] .executive-track-card,
+#appView[data-view="executive"] .executive-readiness-bar {
+  height: auto !important;
+}
+
+#appView[data-view="executive"] .executive-risk-list,
+#appView[data-view="executive"] .executive-action-list,
+#appView[data-view="executive"] .executive-decision-list,
+#appView[data-view="executive"] .executive-timeline {
+  grid-template-rows: none !important;
+  grid-auto-rows: minmax(68px, auto) !important;
+  overflow: visible !important;
+}
+
+#appView[data-view="executive"] .executive-risk-item,
+#appView[data-view="executive"] .executive-action-item,
+#appView[data-view="executive"] .executive-decision-item,
+#appView[data-view="executive"] .executive-timeline-item {
+  height: auto !important;
+  min-height: 68px !important;
+  overflow: visible !important;
+}
+
+#appView[data-view="executive"] .executive-risk-item > div:first-child,
+#appView[data-view="executive"] .executive-action-item > div:first-child,
+#appView[data-view="executive"] .executive-decision-item > div:first-child,
+#appView[data-view="executive"] .executive-timeline-item > span:nth-child(2),
+#appView[data-view="executive"] .executive-risk-item :where(strong, span),
+#appView[data-view="executive"] .executive-action-item :where(strong, small),
+#appView[data-view="executive"] .executive-decision-item :where(strong, small),
+#appView[data-view="executive"] .executive-timeline-item :where(strong, small) {
+  overflow: visible !important;
+  -webkit-line-clamp: unset !important;
+}
+
+@media (max-width: 1500px) {
+  #appView[data-view="executive"] .executive-track-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Use the compact top navigation before a permanent sidebar can squeeze the
+   working canvas below a usable width. */
+.topbar {
+  flex: 0 0 auto !important;
+}
+
+@media (max-width: 1100px) {
+  .app-shell {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  .sidebar {
+    position: static !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 12px 16px !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+  }
+
+  body[data-view] .sidebar .brand {
+    grid-column: 1 !important;
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+    gap: 12px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+
+  body[data-view] .sidebar .brand h1 {
+    font-size: 16px !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
+  .sidebar.mobile-nav-open {
+    max-height: 85dvh !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .mobile-nav-toggle {
+    display: inline-flex !important;
+    grid-column: 2 !important;
+    align-items: center !important;
+    gap: 8px !important;
+    min-height: 44px !important;
+    padding: 8px 10px !important;
+    border: 1px solid #557780 !important;
+    border-radius: 6px !important;
+    background: #1d404a !important;
+    color: #fff !important;
+    font: inherit !important;
+    cursor: pointer;
+  }
+
+  .mobile-nav-toggle-icon { display: grid; gap: 3px; width: 16px; }
+  .mobile-nav-toggle-icon i { height: 2px; background: currentColor; }
+
+  .sidebar > .language-switcher,
+  .sidebar > .main-nav,
+  .sidebar > .knowledge-card {
+    grid-column: 1 / -1 !important;
+  }
+
+  .sidebar:not(.mobile-nav-open) > .language-switcher,
+  .sidebar:not(.mobile-nav-open) > .main-nav,
+  .sidebar:not(.mobile-nav-open) > .knowledge-card {
+    display: none !important;
+  }
+
+  .sidebar.mobile-nav-open > .language-switcher,
+  .sidebar.mobile-nav-open > .main-nav,
+  .sidebar.mobile-nav-open > .knowledge-card {
+    display: grid !important;
+  }
+
+  .main {
+    height: auto !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    min-height: 88px !important;
+    height: auto !important;
+  }
+
+  .top-actions {
+    display: flex !important;
+    width: auto !important;
+    max-width: none !important;
+    justify-self: end !important;
+    align-self: start !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .top-actions > * {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: max-content !important;
+    max-width: none !important;
+  }
+
+  :is(
+    #appView[data-view="assets"],
+    #appView[data-view="risks"],
+    #appView[data-view="suppliers"],
+    #appView[data-view="legal"],
+    #appView[data-view="incidents"],
+    #appView[data-view="contracts"]
+  ) :is(.register-command-grid, .register-command-flow) {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="executive"] .executive-track-grid,
+  #appView[data-view="dashboard"] .customer-cockpit,
+  #appView[data-view="dashboard"] .dashboard-program-grid,
+  #appView[data-view="dashboard"] .dashboard-curated-grid,
+  #appView[data-view="dashboard"] .dashboard-tool-grid,
+  #appView[data-view="dashboard"] .dashboard-overview-grid,
+  #appView[data-view="dashboard"] .dashboard-start-status-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Dense registers stay readable through an internal horizontal scroller.
+   Shrinking every column to the viewport produced one-letter-per-line cells. */
+@media (max-width: 1180px) {
+  :is(
+    #appView[data-view="documents"],
+    #appView[data-view="audit"],
+    #appView[data-view="audittrail"],
+    #appView[data-view="policies"],
+    #appView[data-view="soa"],
+    #appView[data-view="legal"],
+    #appView[data-view="incidents"],
+    #appView[data-view="contracts"]
+  ) :is(.table-scroll, .register-table-shell, .soa-table-scroll, .audit-table-scroll) {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    scrollbar-gutter: stable !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  :is(
+    #appView[data-view="documents"],
+    #appView[data-view="audit"],
+    #appView[data-view="audittrail"],
+    #appView[data-view="policies"],
+    #appView[data-view="legal"],
+    #appView[data-view="incidents"],
+    #appView[data-view="contracts"]
+  ) table {
+    width: max-content !important;
+    min-width: 860px !important;
+    table-layout: auto !important;
+  }
+
+  #appView[data-view="soa"] .soa-table {
+    width: max-content !important;
+    min-width: 1320px !important;
+    table-layout: auto !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .top-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    justify-self: stretch !important;
+  }
+
+  .top-actions > * {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .top-actions .icon-button {
+    padding: 8px !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+    gap: 6px !important;
+  }
+
+  #appView[data-view="review"] .review-item-meta,
+  :is(
+    #appView[data-view="legal"],
+    #appView[data-view="incidents"],
+    #appView[data-view="contracts"]
+  ) :is(.register-simple-form, .form-grid) {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="review"] .review-item-actions,
+  #appView[data-view="review"] .review-item-actions > * {
+    width: 100% !important;
+  }
+}
+
+/* Final measured layout guards 2026-08-22.
+   These rules only address viewport collisions found by the browser audit. */
+#appView[data-view="tasks"] {
+  height: max-content !important;
+  min-height: max-content !important;
+  max-height: none !important;
+  flex-shrink: 0 !important;
+  grid-template-rows: none !important;
+  grid-auto-rows: auto !important;
+  align-content: start !important;
+  overflow: visible !important;
+}
+
+#appView[data-view="tasks"] > * {
+  height: auto !important;
+  min-height: max-content !important;
+  max-height: none !important;
+}
+
+#appView[data-view="review"] .review-workbench {
+  align-items: start !important;
+}
+
+#appView[data-view="review"] .review-list-panel {
+  height: auto !important;
+  max-height: min(1100px, calc(100vh - 132px)) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scrollbar-gutter: stable !important;
+}
+
+#appView[data-view="review"] .review-detail-panel {
+  position: sticky !important;
+  top: 128px !important;
+  height: auto !important;
+  max-height: calc(100vh - 148px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scrollbar-gutter: stable !important;
+}
+
+@media (min-width: 1501px) {
+  #appView[data-view="review"] .review-item {
+    grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.1fr) !important;
+    grid-template-areas:
+      "main meta"
+      "state actions" !important;
+  }
+}
+
+@media (max-width: 1500px) {
+  #appView[data-view="risks"] .risk-acceptance-card {
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 0.72fr) !important;
+  }
+
+  #appView[data-view="risks"] .risk-acceptance-card-actions {
+    grid-column: 1 / -1 !important;
+    justify-content: flex-start !important;
+  }
+}
+
+#appView[data-view="dashboard"] .dashboard-project-focus,
+#appView[data-view="dashboard"] .dashboard-mapping-focus {
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.28fr) minmax(0, 0.8fr) !important;
+}
+
+@media (max-width: 1180px) {
+  #appView[data-view="dashboard"] .dashboard-project-focus,
+  #appView[data-view="dashboard"] .dashboard-mapping-focus {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 760px) {
+  #appView[data-view="review"] .review-list-panel,
+  #appView[data-view="review"] .review-detail-panel {
+    position: static !important;
+    max-height: 72vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  #appView[data-view="dashboard"] :is(
+    .dashboard-overview-library,
+    .dashboard-overview-details,
+    .dashboard-workflow-details
+  ) {
+    overflow: visible !important;
+  }
+
+  #appView[data-view="dashboard"] .dashboard-overview-detail-stack,
+  #appView[data-view="dashboard"] .dashboard-overview-detail-stack.nested {
+    padding: 10px !important;
+  }
+
+  #appView[data-view="dashboard"] .management-risk-insights {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="dashboard"] .management-heatmap-wrap {
+    min-width: 0 !important;
+    overflow-x: auto !important;
+    overscroll-behavior-inline: contain;
+  }
+
+  #appView[data-view="dashboard"] .management-heatmap-grid {
+    min-width: 260px !important;
+  }
+
+  #appView[data-view="dashboard"] .integration-visual {
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #appView[data-view="risks"] .risk-acceptance-card {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="executive"] .executive-readiness-main,
+  #appView[data-view="executive"] .executive-readiness-trend,
+  #appView[data-view="executive"] .executive-readiness-blocker {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Cross-page responsive quality pass 2026-08-22.
+   This final layer wins over legacy component themes by design. */
+body[data-view="executive"] .topbar {
+  display: none !important;
+}
+
+@media (max-width: 1599px) {
+  #appView[data-view="executive"] .executive-page-kpis,
+  #appView[data-view="executive"] .executive-mission-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #appView[data-view="executive"] .executive-page-kpi,
+  #appView[data-view="executive"] .executive-mission-panel {
+    height: auto !important;
+  }
+
+  #appView[data-view="executive"] .executive-page-kpi {
+    min-height: 176px !important;
+  }
+
+  #appView[data-view="executive"] .executive-mission-panel {
+    min-height: 356px !important;
+    overflow: visible !important;
+  }
+
+  #appView[data-view="executive"] :is(
+    .executive-risk-list,
+    .executive-action-list,
+    .executive-decision-list,
+    .executive-timeline
+  ) {
+    grid-template-rows: none !important;
+    grid-auto-rows: minmax(68px, auto) !important;
+    overflow: visible !important;
+  }
+
+  #appView[data-view="executive"] :is(
+    .executive-risk-item,
+    .executive-action-item,
+    .executive-decision-item,
+    .executive-timeline-item
+  ) {
+    height: auto !important;
+    min-height: 68px !important;
+    overflow: visible !important;
+  }
+
+  #appView[data-view="executive"] :is(
+    .executive-risk-item strong,
+    .executive-action-item strong,
+    .executive-decision-item strong,
+    .executive-timeline-item strong
+  ) {
+    display: block !important;
+    overflow: visible !important;
+    -webkit-line-clamp: unset !important;
+  }
+
+  #appView[data-view="dashboard"] .dashboard-project-focus {
+    grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.25fr) !important;
+  }
+
+  #appView[data-view="dashboard"] .dashboard-project-next {
+    grid-column: 1 / -1 !important;
+  }
+
+  #appView[data-view="dashboard"] .dashboard-project-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #appView[data-view="templates"] .template-library-button {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #appView[data-view="templates"] .template-library-button-meta {
+    align-items: flex-start !important;
+    min-width: 0 !important;
+  }
+
+  #appView[data-view="templates"] .template-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #appView[data-view="tasks"] .register-simple-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  #appView[data-view="tasks"] .register-simple-form .field.wide {
+    grid-column: span 2 !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  #appView[data-view="dashboard"] .dashboard-project-focus {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="dashboard"] .dashboard-project-next {
+    grid-column: auto !important;
+  }
+
+  #appView[data-view="suppliers"] .vendor-workflow-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #appView[data-view="suppliers"] .vendor-workflow-steps::before {
+    display: none !important;
+  }
+
+  #appView[data-view="dashboard"] .table-scroll {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #appView[data-view="dashboard"] .compare-table {
+    width: max-content !important;
+    min-width: 760px !important;
+    table-layout: auto !important;
+  }
+}
+
+@media (max-width: 1320px) {
+  #appView[data-view="templates"] .template-layout,
+  #appView[data-view="tasks"] .register-simple-form {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="tasks"] .register-simple-form .field.wide {
+    grid-column: auto !important;
+  }
+}
+
+@media (max-width: 900px) {
+  #appView[data-view="executive"] .executive-page-kpis,
+  #appView[data-view="executive"] .executive-mission-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 760px) {
+  #appView[data-view="dashboard"] .dashboard-project-steps,
+  #appView[data-view="suppliers"] .vendor-workflow-steps,
+  #appView[data-view="audittrail"] .audit-trail-focus-strip {
+    grid-template-columns: 1fr !important;
+  }
+
+  #appView[data-view="audittrail"] .audit-trail-focus-strip article {
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+  }
+
+  #appView[data-view="dashboard"] .integration-visual {
+    min-height: 292px !important;
+    height: auto !important;
+  }
+
+  #appView[data-view="project"] .project-command-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  #appView[data-view="project"] .project-command-actions > * {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+#appView[data-view="audit"] .audit-link-cell {
+  min-width: 140px !important;
+}
+
+/* Shared project context stays compact; actions remain in a native disclosure. */
+body[data-view] .topbar {
+  margin: 0 !important;
+  left: auto !important;
+  right: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+@media (min-width: 1101px) {
+  body[data-view] { --sfm-sidebar-width: 276px !important; }
+  body[data-view] .app-shell { grid-template-columns: 276px minmax(0, 1fr) !important; }
+  body[data-view] .sidebar { width: 276px !important; min-width: 276px !important; padding: 20px 18px !important; }
+  body[data-view] .brand { grid-template-columns: 42px minmax(0, 1fr) !important; gap: 12px !important; }
+  body[data-view] .brand h1 { font-size: 16px !important; }
+}
+
+#appView[data-view="executive"] .executive-mission-head h3 {
+  font-size: 30px !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0 !important;
+  hyphens: none !important;
+}
+
+.executive-tenant { display: block; font-size: 14px; line-height: 1.5; color: #526779; }
+#appView[data-view="executive"] .executive-page-panel-head { min-height: 64px !important; height: auto !important; padding: 14px 16px !important; }
+#appView[data-view="executive"] .executive-mission-panel { min-height: 280px !important; }
+#appView[data-view="executive"] .executive-kpi-copy strong { font-size: 26px !important; }
+
+@media (max-width: 1599px) {
+  #appView:is([data-view="legal"], [data-view="incidents"], [data-view="contracts"]) > .register-module-workspace {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  #appView:is([data-view="legal"], [data-view="incidents"], [data-view="contracts"]) .module-side-rail {
+    position: static !important;
+    max-height: none !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)) !important;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1599px) {
+  #appView:is([data-view="legal"], [data-view="incidents"], [data-view="contracts"]) :is(.register-command-grid, .register-command-flow) {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1320px) and (max-width: 1599px) {
+  #appView[data-view="executive"] .executive-page-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  #appView[data-view="executive"] .executive-page-kpi { grid-template-columns: 44px minmax(0, 1fr) !important; padding: 16px !important; gap: 12px !important; }
+  #appView[data-view="executive"] .executive-kpi-visual { width: 44px !important; height: 44px !important; }
+  #appView[data-view="executive"] .executive-kpi-copy strong { font-size: 22px !important; }
+  #appView[data-view="assets"] .asset-hero-grid,
+  #appView[data-view="suppliers"] .vendor-hero-grid {
+    grid-template-columns: minmax(260px, 1.6fr) repeat(4, minmax(0, 1fr)) !important;
+  }
+  #appView[data-view="assets"] .asset-overview-card,
+  #appView[data-view="suppliers"] .vendor-overview-card { grid-column: auto !important; }
+}
+
+@media (max-width: 760px) {
+  #appView[data-view="executive"] .executive-mission-head h3 { font-size: 26px !important; }
+  #appView[data-view="executive"] .executive-mission-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  #appView[data-view="executive"] .executive-data-state { grid-column: 1 / -1 !important; }
+  #appView[data-view="executive"] .executive-mission-actions > button { min-width: 0 !important; width: 100% !important; padding: 8px !important; }
+}
+
+#appView[data-view] > .workspace-project-context {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr) !important;
+  align-items: start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 0 12px;
+  margin: 0;
+  border-bottom: 1px solid #dce6ee;
+  background: transparent;
+}
+
+.workspace-project-details {
+  min-width: 0;
+}
+
+.workspace-project-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 4px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.workspace-project-details > summary::-webkit-details-marker { display: none; }
+.workspace-project-details > summary::after { content: "+"; margin-left: auto; font-size: 20px; }
+.workspace-project-details[open] > summary::after { content: "-"; }
+.workspace-project-details > summary > span:first-child { min-width: 0; }
+.workspace-project-details > summary :is(strong, small) { display: block; overflow-wrap: anywhere; }
+.workspace-project-details > summary strong { font-size: 15px; line-height: 1.45; }
+.workspace-project-details > summary small { font-size: 12px; color: #526779; line-height: 1.5; }
+.workspace-project-role { font-size: 12px; color: #526779; }
+.workspace-project-role > span { display: block; }
+.workspace-project-details[open] { grid-column: 1 / -1; }
+.workspace-project-details[open] ~ .workspace-live-strip { grid-column: 1 / -1; }
+#appView .workspace-project-details:not([open]) > .workspace-context-bar { display: none !important; }
+
+#appView .workspace-project-details > .workspace-context-bar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 16px !important;
+  padding: 16px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+#appView .workspace-project-details .workspace-context-actions {
+  grid-column: 1 / -1 !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+
+#appView .workspace-project-details .workspace-context-actions > button {
+  width: auto !important;
+  min-width: 0 !important;
+  flex: 0 1 auto !important;
+}
+
+#appView .workspace-project-context > .workspace-live-strip {
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+/* Text commands need enough intrinsic width for their longest word. */
+#appView[data-view] button:is(.primary-button, .quiet-button) {
+  min-width: min-content !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  hyphens: manual !important;
+  height: auto !important;
+  line-height: 1.4 !important;
+}
+
+#appView[data-view] :is(.register-form-panel, .register-simple-form, .form-grid, form) label,
+#appView[data-view] .policy-package-chip-open {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+
+#appView[data-view="audit"] .evidence-matrix-actions { min-width: 150px !important; }
+#appView[data-view="soa"] .soa-input { min-width: 170px !important; }
+#appView[data-view="soa"] .soa-select { min-width: 145px !important; }
+#appView[data-view="soa"] .soa-table { table-layout: auto !important; }
+
+:is(button, summary, input, select, textarea, a):focus-visible {
+  outline: 2px solid #087f8c !important;
+  outline-offset: 3px !important;
+}
+
+@media (max-width: 760px) {
+  #appView[data-view] > .workspace-project-context,
+  #appView .workspace-project-details > .workspace-context-bar {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  #appView .workspace-project-details .workspace-context-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .workspace-project-details > summary { min-height: 44px; }
+  .workspace-project-role { margin-left: auto; }
+  #appView[data-view] > .workspace-project-context { gap: 8px; }
 }

@@ -2642,6 +2642,179 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(event[0], "workspace.updated")
         self.assertEqual(event[1], approved["revision"])
 
+    def test_05p_audit_package_requires_current_advisor_approval(self):
+        customer_username = "audit.package.customer"
+        customer_temp_password = "Violet-River-83!Quiet-Stone"
+        customer_password = "Copper-Meadow-47!Clear-Harbor"
+        status, payload, _ = self.admin.request(
+            "POST",
+            "/api/users",
+            {
+                "username": customer_username,
+                "password": customer_temp_password,
+                "role": "customer",
+            },
+            csrf=True,
+        )
+        self.assertEqual(status, 201)
+        customer = ApiClient(self.base_url)
+        status, payload, _ = customer.login(customer_username, customer_temp_password)
+        self.assertEqual(status, 200)
+        status, payload, _ = customer.request(
+            "POST",
+            "/api/users/me/password",
+            {
+                "currentPassword": customer_temp_password,
+                "newPassword": customer_password,
+            },
+            csrf=True,
+        )
+        self.assertEqual(status, 200)
+
+        status, workspace, _ = self.admin.request("GET", "/api/state")
+        self.assertEqual(status, 200)
+        if workspace["state"] is None:
+            initial_state = {key: [] for key in (
+                "documents", "assets", "risks", "legal", "suppliers", "policies",
+                "incidents", "contracts", "integrations", "tasks", "projectPlan",
+                "templateDrafts",
+            )}
+            initial_state.update({
+                "soa": [],
+                "gaps": [],
+                "auditFindings": [],
+                "managementReview": {
+                    "id": "management-review",
+                    "title": "Managementbewertung",
+                    "auditRelevant": True,
+                    "reviewStatus": "offen",
+                },
+                "internalAuditPlan": {
+                    "id": "internal-audit-plan",
+                    "title": "Interne Auditplanung",
+                    "auditRelevant": False,
+                    "reviewStatus": "offen",
+                },
+            })
+            status, workspace, _ = self.admin.request(
+                "PUT",
+                "/api/state",
+                {"state": initial_state, "expectedRevision": 0},
+                csrf=True,
+            )
+            self.assertEqual(status, 200)
+
+        status, initial, _ = self.admin.request("GET", "/api/audit-package/status")
+        self.assertEqual(status, 200)
+        self.assertFalse(initial["auditPackage"]["advisorApproved"])
+
+        status, forbidden, _ = customer.request(
+            "POST",
+            "/api/audit-package/approve",
+            {
+                "fingerprint": initial["auditPackage"]["fingerprint"],
+                "expectedRevision": initial["auditPackage"]["workspaceRevision"],
+            },
+            csrf=True,
+        )
+        self.assertEqual(status, 403)
+        self.assertIn("permission", forbidden["error"])
+
+        status, current, _ = self.admin.request("GET", "/api/state")
+        self.assertEqual(status, 200)
+        minimal_state = current["state"]
+        for key in (
+            "documents", "assets", "risks", "legal", "suppliers", "policies",
+            "incidents", "contracts", "integrations", "tasks", "projectPlan",
+            "templateDrafts", "soa", "gaps", "auditFindings",
+        ):
+            minimal_state[key] = []
+        minimal_state["managementReview"] = {
+            "id": "management-review",
+            "title": "Managementbewertung",
+            "auditRelevant": False,
+            "reviewStatus": "offen",
+            "consultantInternalComment": "must-not-be-exported",
+        }
+        minimal_state["internalAuditPlan"] = {
+            "id": "internal-audit-plan",
+            "title": "Interne Auditplanung",
+            "auditRelevant": False,
+            "reviewStatus": "offen",
+        }
+        minimal_state["auditPackage"] = {"status": "vorbereitet", "approvals": []}
+        status, saved, _ = self.admin.request(
+            "PUT",
+            "/api/state",
+            {"state": minimal_state, "expectedRevision": current["revision"]},
+            csrf=True,
+        )
+        self.assertEqual(status, 200)
+
+        status, prepared, _ = self.admin.request("GET", "/api/audit-package/status")
+        self.assertEqual(status, 200)
+        self.assertTrue(prepared["auditPackage"]["formalGateClear"])
+        self.assertFalse(prepared["auditPackage"]["advisorApproved"])
+        self.assertFalse(prepared["auditPackage"]["exportReady"])
+        self.assertEqual(prepared["auditPackage"]["status"], "formal_vorbereitet")
+
+        status, not_ready, _ = customer.request("GET", "/api/audit-package/export")
+        self.assertEqual(status, 409)
+        self.assertEqual(not_ready["error"], "audit_package_not_approved")
+
+        status, approved, _ = self.admin.request(
+            "POST",
+            "/api/audit-package/approve",
+            {
+                "fingerprint": prepared["auditPackage"]["fingerprint"],
+                "expectedRevision": saved["revision"],
+                "comment": "Technische Paketfreigabe fuer den Integrationstest.",
+            },
+            csrf=True,
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(approved["auditPackage"]["advisorApproved"])
+        self.assertTrue(approved["auditPackage"]["exportReady"])
+        self.assertEqual(approved["approval"]["approvedBy"], "admin")
+
+        status, export_bytes, headers = customer.request("GET", "/api/audit-package/export")
+        self.assertEqual(status, 200)
+        self.assertIn("application/zip", headers.get("Content-Type", ""))
+        with zipfile.ZipFile(BytesIO(export_bytes)) as archive:
+            self.assertIn("manifest.json", archive.namelist())
+            manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+            registers = archive.read("workspace/registers.json").decode("utf-8")
+        self.assertEqual(manifest["fingerprint"], approved["auditPackage"]["fingerprint"])
+        self.assertEqual(manifest["advisorApproval"]["approvedBy"], "admin")
+        self.assertNotIn("must-not-be-exported", registers)
+
+        status, current, _ = self.admin.request("GET", "/api/state")
+        self.assertEqual(status, 200)
+        changed_state = current["state"]
+        changed_state["documents"].append({
+            "id": "audit-package-new-evidence",
+            "name": "Neuer auditrelevanter Nachweis",
+            "status": "In Pruefung",
+            "reviewStatus": "vom_kunden_eingereicht",
+            "auditRelevant": True,
+        })
+        status, _, _ = self.admin.request(
+            "PUT",
+            "/api/state",
+            {"state": changed_state, "expectedRevision": current["revision"]},
+            csrf=True,
+        )
+        self.assertEqual(status, 200)
+
+        status, stale, _ = self.admin.request("GET", "/api/audit-package/status")
+        self.assertEqual(status, 200)
+        self.assertTrue(stale["auditPackage"]["approvalStale"])
+        self.assertFalse(stale["auditPackage"]["advisorApproved"])
+        self.assertGreater(stale["auditPackage"]["blockerCount"], 0)
+        status, blocked_export, _ = customer.request("GET", "/api/audit-package/export")
+        self.assertEqual(status, 409)
+        self.assertEqual(blocked_export["error"], "audit_package_not_approved")
+
     def test_06_audit_hash_chain_detects_tampering(self):
         anonymous = ApiClient(self.base_url)
         status, payload, _ = anonymous.request("GET", "/api/audit-log/integrity")

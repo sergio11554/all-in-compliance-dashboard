@@ -6,6 +6,7 @@
     <title>SFM Compliance Dashboard</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="styles.css?v=20260715.1" />
+    <link rel="stylesheet" href="intune.css?v=20260909.1" />
   </head>
   <body>
     <div class="app-shell">
@@ -61,11 +62,11 @@
               <span aria-hidden="true">↓</span>
               <span data-i18n="button.export">Export</span>
             </button>
-            <label class="icon-button file-import" title="Daten importieren">
+            <button class="icon-button file-import" id="importBtn" type="button" title="Daten importieren" aria-label="Daten importieren">
               <span aria-hidden="true">↑</span>
               <span data-i18n="button.import">Import</span>
-              <input id="importInput" type="file" accept="application/json" />
-            </label>
+            </button>
+            <input id="importInput" type="file" accept="application/json" hidden />
           </div>
         </header>
 
@@ -91,6 +92,7 @@
     <script src="project-plan-engine.js?v=20260714.1"></script>
     <script src="document-engine.js?v=20260714.1"></script>
     <script src="workspace-merge.js?v=20260714.1"></script>
+    <script src="intune.js?v=20260909.1"></script>
     <script src="app.js?v=20260716.1"></script>
   </body>
 </html>

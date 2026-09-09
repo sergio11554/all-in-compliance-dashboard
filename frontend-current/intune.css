@@ -1,0 +1,64 @@
+.intune-widget {
+  min-width: 0;
+  margin: 0 0 16px;
+  padding: 16px 0;
+  border-block: 1px solid #d8e3eb;
+  letter-spacing: 0;
+}
+.intune-heading, .intune-actions, .intune-title, .intune-preview-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.intune-heading, .intune-preview-heading { justify-content: space-between; }
+#appView .intune-widget h3 { margin: 0; font-size: 18px; line-height: 1.4; }
+#appView .intune-widget h4, #appView .intune-source h4 { margin: 0; font-size: 16px; line-height: 1.4; }
+.intune-title > span { display: grid; place-items: center; color: #087285; width: 36px; height: 36px; }
+.intune-title svg, .intune-actions svg { width: 20px; height: 20px; flex: 0 0 20px; }
+.intune-state { color: #526779; font-size: 13px; }
+.intune-body { padding-top: 16px; }
+.intune-status-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0 0 16px; }
+.intune-status-grid div { min-width: 0; }
+.intune-status-grid dt { color: #526779; font-size: 12px; margin-bottom: 4px; }
+.intune-status-grid dd { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.intune-schedule { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+.intune-schedule input { width: 18px; height: 18px; margin: 0; accent-color: #087285; }
+.intune-notice, .intune-error, .intune-success { margin: 12px 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.intune-notice { color: #526779; }
+.intune-error { color: #a62128; }
+.intune-success { color: #12653d; }
+.intune-preview { margin-top: 20px; padding-top: 16px; border-top: 1px solid #d8e3eb; }
+.intune-preview-heading > span { font-size: 13px; color: #526779; }
+.intune-counts { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 14px 0; font-size: 14px; }
+.intune-counts strong { margin-right: 5px; }
+.intune-table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+#appView[data-view] .intune-table { width: 100% !important; min-width: 1000px !important; max-width: none !important; table-layout: auto !important; border-collapse: collapse; }
+#appView[data-view] .intune-table th, #appView[data-view] .intune-table td { min-width: 140px !important; text-align: left; padding: 12px 10px; font-size: 13px !important; line-height: 1.5; border-bottom: 1px solid #d8e3eb; white-space: normal; overflow-wrap: anywhere; word-break: normal !important; hyphens: none !important; letter-spacing: 0 !important; text-transform: none !important; }
+#appView[data-view] .intune-table th:nth-child(2), #appView[data-view] .intune-table td:nth-child(2) { min-width: 200px !important; }
+#appView[data-view] .intune-table th { color: #526779; background: #f5f8fa; }
+.intune-table small { display: block; font-size: 12px; color: #526779; }
+.intune-source-badge { display: block; width: fit-content; margin-top: 6px; color: #087285; font-size: 12px; }
+.intune-widget button:disabled { opacity: .55; cursor: not-allowed; }
+.intune-setup { margin-block: 16px; padding-block: 16px; border-block: 1px solid #d8e3eb; }
+.intune-setup-links { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-block: 16px; }
+.intune-setup a, .intune-notice a { color: #086c7c; text-decoration: underline; text-underline-offset: 3px; font-size: 14px; }
+.intune-setup-requirements { display: grid; gap: 12px; margin-block: 12px; }
+.intune-setup-requirements dt { font-size: 14px; font-weight: 600; }
+.intune-setup-requirements dd { margin: 4px 0 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.intune-setup fieldset { border: 0; padding: 0; margin: 20px 0 0; min-width: 0; }
+.intune-setup legend { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.intune-config-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.intune-config-fields label { display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 14px; font-weight: 600; }
+.intune-config-fields label:last-child { grid-column: 1 / -1; }
+#appView .intune-config-fields input { width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; font-size: 16px; padding: 10px; letter-spacing: 0; }
+.intune-setup fieldset:disabled { opacity: .6; }
+.intune-disconnect { margin-top: 20px; font-size: 14px; }
+.intune-disconnect button { margin: 4px 8px 4px 0; }
+@media (max-width: 760px) {
+  .intune-config-fields { grid-template-columns: 1fr; }
+  .intune-status-grid { grid-template-columns: 1fr; gap: 12px; }
+  .intune-actions { width: 100%; }
+  .intune-actions > button { flex: 1 1 auto; min-height: 44px; }
+  .intune-schedule { min-height: 44px; }
+}

@@ -5,6 +5,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { chromium } = require("playwright");
+const { assertResponsiveLayout, assertExecutiveData, assertWorkspaceInteractions } = require("./ui_quality.cjs");
+const { assertIntuneUi } = require("./intune_ui.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const BACKEND = path.join(ROOT, "backend_app.py");
@@ -45,6 +47,29 @@ async function waitForHealth(baseUrl, serverProcess) {
   throw new Error(`Isolated backend did not become ready: ${lastError || "timeout"}`);
 }
 
+async function stopProcess(processHandle) {
+  if (!processHandle || processHandle.exitCode !== null || processHandle.signalCode !== null) return;
+  await new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(forceKillTimer);
+      clearTimeout(giveUpTimer);
+      resolve();
+    };
+    processHandle.once("exit", finish);
+    const forceKillTimer = setTimeout(() => {
+      if (processHandle.exitCode === null && processHandle.signalCode === null) {
+        processHandle.kill("SIGKILL");
+      }
+    }, 3000);
+    const giveUpTimer = setTimeout(finish, 5000);
+    processHandle.kill("SIGTERM");
+    if (processHandle.exitCode !== null || processHandle.signalCode !== null) finish();
+  });
+}
+
 async function assertNoHorizontalOverflow(page, label) {
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
@@ -64,7 +89,8 @@ async function assertPageIntegrity(page, label) {
     const visible = (node) => {
       const rect = node.getBoundingClientRect();
       const style = getComputedStyle(node);
-      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden"
+        && node.checkVisibility({ checkVisibilityCSS: true });
     };
     const ids = [...document.querySelectorAll("[id]")].map((node) => node.id).filter(Boolean);
     const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
@@ -99,6 +125,15 @@ async function assertPageIntegrity(page, label) {
   assert.deepEqual(audit.unboundButtons, [], `${label} contains visually interactive buttons without an action marker: ${audit.unboundButtons.join("\n")}`);
   assert.deepEqual(audit.brokenImages, [], `${label} contains broken images: ${audit.brokenImages.join(", ")}`);
   await assertNoHorizontalOverflow(page, label);
+  await assertResponsiveLayout(page, label);
+  if (SCREENSHOT_DIR) {
+    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      document.querySelector(".main")?.scrollTo(0, 0);
+    });
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${label.replace(/[^a-z0-9-]/gi, "-")}.png`) });
+  }
 }
 
 async function run() {
@@ -138,7 +173,7 @@ async function run() {
       headless: true,
       ...(executablePath ? { executablePath } : {}),
     });
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: "Europe/Berlin" });
     await context.addInitScript(() => {
       localStorage.setItem("isms-catalyst-dashboard-v1", "{corrupted-test-state");
     });
@@ -164,6 +199,9 @@ async function run() {
     await page.locator(".top-status-chip.live", { hasText: "Live verbunden" }).waitFor();
     await page.locator("#viewTitle").filter({ hasText: "Dashboard" }).waitFor();
     await assertNoHorizontalOverflow(page, "Dashboard desktop");
+    await assertExecutiveData(page, baseUrl);
+    await assertWorkspaceInteractions(page, baseUrl);
+    await assertIntuneUi(page, baseUrl);
 
     const platformViews = [
       "dashboard", "executive", "clients", "notifications", "guided", "project", "iso", "nis2",
@@ -862,23 +900,26 @@ async function run() {
       await assertPageIntegrity(page, `${view} mobile`);
     }
 
+    const responsiveViewports = [
+      { label: "tablet", width: 1024, height: 768 },
+      { label: "widescreen", width: 1920, height: 1080 },
+    ];
+    for (const viewport of responsiveViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      for (const view of platformViews) {
+        await page.goto(`${baseUrl}/#${view}`, { waitUntil: "domcontentloaded" });
+        await page.locator(`#appView[data-view="${view}"]`).waitFor();
+        await assertPageIntegrity(page, `${view} ${viewport.label}`);
+      }
+    }
+
     assert.deepEqual(browserErrors, [], `Browser errors detected:\n${browserErrors.join("\n")}`);
     if (liveContext) await liveContext.close();
     await context.close();
     console.log("Browser E2E checks passed.");
   } finally {
     if (browser) await browser.close();
-    serverProcess.kill("SIGTERM");
-    await new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        serverProcess.kill("SIGKILL");
-        resolve();
-      }, 3000);
-      serverProcess.once("exit", () => {
-        clearTimeout(timer);
-        resolve();
-      });
-    });
+    await stopProcess(serverProcess);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
